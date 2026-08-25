@@ -12,7 +12,7 @@
     <div>
       <div class="eyebrow">GitHub Pages · Chrome / Edge</div>
       <h1>논문 PDF 관리 테스트</h1>
-      <p>로컬 논문 폴더를 연결하고 PDF를 새 창에서 편집한 뒤 원래 파일에 그대로 저장합니다.</p>
+      <p>로컬 폴더의 PDF를 선택해 연속 스크롤 방식으로 읽고, 표준 PDF 주석으로 저장합니다.</p>
     </div>
     <div id="envBadge" class="badge">환경 확인 중</div>
   </header>
@@ -35,12 +35,9 @@
       </div>
       <input id="searchBox" type="search" placeholder="파일명 또는 상대경로 검색">
     </div>
-
     <div class="table-wrap">
       <table>
-        <thead>
-          <tr><th>파일명</th><th>상대경로</th><th>크기</th><th></th></tr>
-        </thead>
+        <thead><tr><th>파일명</th><th>상대경로</th><th>크기</th><th></th></tr></thead>
         <tbody id="pdfBody">
           <tr><td colspan="4" class="empty">논문 폴더를 선택하세요.</td></tr>
         </tbody>
@@ -49,16 +46,16 @@
   </section>
 
   <section class="card info">
-    <h2>테스트할 핵심</h2>
-    <ol>
-      <li>PDF를 누르면 <b>새 창</b>에서 열린다.</li>
-      <li>새 창 상단에 <b>원본에 저장</b> 버튼이 계속 보인다.</li>
-      <li>형광펜/메모 후 <b>원본에 저장</b>을 누르면 기존 경로·기존 파일명 그대로 덮어쓴다.</li>
-      <li><b>복사본 저장</b>은 같은 폴더에 <code>_annotated.pdf</code> 파일을 만든다.</li>
-    </ol>
+    <h2>이번 버전</h2>
+    <ul>
+      <li>페이지 넘김 대신 <b>아래로 계속 스크롤</b></li>
+      <li>형광펜은 표준 PDF <code>Highlight</code> 주석</li>
+      <li>메모는 표준 PDF <code>Text</code> 주석</li>
+      <li><b>원본에 저장</b>하면 기존 경로·기존 파일명 그대로 저장</li>
+      <li><b>복사본 저장</b>하면 같은 폴더에 <code>_annotated.pdf</code> 생성</li>
+    </ul>
   </section>
 </main>
-
 <script src="./shared.js"></script>
 <script src="./main.js"></script>
 </body>
