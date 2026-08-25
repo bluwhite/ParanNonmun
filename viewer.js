@@ -253,9 +253,17 @@ async function saveToOriginal(){
     await writable.close();
 
     originalBytes=bytes;
-    // Re-load so future edits are based on the newly saved PDF.
+
+    // 방금 저장한 PDF를 다시 불러와 화면에도 즉시 반영한다.
     pdfDoc=await pdfjsLib.getDocument({data:originalBytes.slice()}).promise;
-    clearPendingAnnotations();
+
+    // 주석은 이제 PDF 본문에 실제로 들어갔으므로 임시 오버레이 목록은 비운다.
+    for(const key of Object.keys(annotations)) delete annotations[key];
+    setDirty(false);
+
+    // 수정된 PDF 자체를 다시 렌더링해야 저장 직후에도 표시가 그대로 보인다.
+    await renderPage();
+
     setStatus(`저장 완료: ${relativePath}`);
   }catch(e){
     console.error(e);
