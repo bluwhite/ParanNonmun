@@ -2,93 +2,64 @@
 <html lang="ko">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>로컬 PDF 주석 테스트</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>논문 PDF 관리 테스트</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
 <main class="wrap">
   <header class="hero">
     <div>
-      <div class="eyebrow">GitHub Pages · 로컬 PDF 편집 실험</div>
-      <h1>PDF 메모·형광펜 저장 테스트</h1>
-      <p>PDF는 서버에 업로드하지 않습니다. Chrome/Edge에서 선택한 로컬 폴더의 파일을 브라우저 안에서 읽고 수정본을 같은 폴더에 저장합니다.</p>
+      <div class="eyebrow">GitHub Pages · Chrome / Edge</div>
+      <h1>논문 PDF 관리 테스트</h1>
+      <p>로컬 논문 폴더를 연결하고 PDF를 새 창에서 편집한 뒤 원래 파일에 그대로 저장합니다.</p>
     </div>
     <div id="envBadge" class="badge">환경 확인 중</div>
   </header>
 
   <section class="card">
-    <h2>1. 논문 폴더 선택</h2>
+    <h2>1. 논문 폴더 연결</h2>
     <div class="buttons">
-      <button id="chooseFolderBtn" class="primary">논문 폴더 선택</button>
-      <button id="reopenFolderBtn">이전 폴더 다시 열기</button>
-      <button id="rescanBtn" disabled>PDF 다시 검색</button>
+      <button id="chooseBtn" class="primary">논문 폴더 선택</button>
+      <button id="reopenBtn">이전 폴더 다시 열기</button>
+      <button id="scanBtn" disabled>PDF 다시 검색</button>
     </div>
     <div id="status" class="status">아직 폴더를 선택하지 않았습니다.</div>
   </section>
 
   <section class="card">
     <div class="section-head">
-      <div><h2>2. PDF 선택</h2><p id="pdfCount">PDF 0개</p></div>
-      <input id="searchBox" type="search" placeholder="파일명 또는 경로 검색">
+      <div>
+        <h2>2. PDF 목록</h2>
+        <p id="countText">PDF 0개</p>
+      </div>
+      <input id="searchBox" type="search" placeholder="파일명 또는 상대경로 검색">
     </div>
+
     <div class="table-wrap">
       <table>
-        <thead><tr><th>파일명</th><th>상대경로</th><th>크기</th><th></th></tr></thead>
-        <tbody id="pdfBody"><tr><td colspan="4" class="empty">폴더를 선택하면 PDF 목록이 표시됩니다.</td></tr></tbody>
+        <thead>
+          <tr><th>파일명</th><th>상대경로</th><th>크기</th><th></th></tr>
+        </thead>
+        <tbody id="pdfBody">
+          <tr><td colspan="4" class="empty">논문 폴더를 선택하세요.</td></tr>
+        </tbody>
       </table>
     </div>
   </section>
 
-  <section id="editorCard" class="card hidden">
-    <div class="editor-head">
-      <div><h2>3. PDF 편집</h2><p id="currentFile">선택된 파일 없음</p></div>
-      <div class="page-controls">
-        <button id="prevPageBtn">◀ 이전</button>
-        <span><b id="pageNum">1</b> / <span id="pageCount">1</span></span>
-        <button id="nextPageBtn">다음 ▶</button>
-      </div>
-    </div>
-
-    <div class="toolbox">
-      <button id="highlightToolBtn" class="tool active">형광펜</button>
-      <button id="noteToolBtn" class="tool">메모</button>
-      <button id="undoBtn">현재 페이지 마지막 작업 취소</button>
-      <button id="clearPageBtn">현재 페이지 주석 지우기</button>
-      <div class="note-input-wrap">
-        <label for="noteText">메모 내용</label>
-        <input id="noteText" type="text" placeholder="메모 모드에서 입력 후 PDF의 위치를 클릭">
-      </div>
-    </div>
-
-    <div class="instructions" id="instructionText">형광펜: PDF 위에서 원하는 영역을 마우스로 드래그하세요.</div>
-
-    <div id="viewerWrap" class="viewer-wrap">
-      <canvas id="pdfCanvas"></canvas>
-      <canvas id="overlayCanvas"></canvas>
-    </div>
-
-    <div class="savebar">
-      <button id="saveCopyBtn" class="primary">수정본 새 파일로 저장</button>
-      <span id="saveNameHint"></span>
-    </div>
-  </section>
-
   <section class="card info">
-    <h2>이번 샘플에서 확인할 것</h2>
+    <h2>테스트할 핵심</h2>
     <ol>
-      <li>로컬 PDF를 웹앱 안에서 직접 표시할 수 있는지</li>
-      <li>형광펜 표시를 마우스로 추가할 수 있는지</li>
-      <li>한국어 메모를 원하는 위치에 추가할 수 있는지</li>
-      <li><b>수정본 새 파일로 저장</b>을 누르면 원본 옆에 <code>_annotated.pdf</code>가 생성되는지</li>
-      <li>생성된 PDF를 Acrobat/Preview/Chrome에서 열었을 때 표시가 실제 PDF 안에 남아 있는지</li>
+      <li>PDF를 누르면 <b>새 창</b>에서 열린다.</li>
+      <li>새 창 상단에 <b>원본에 저장</b> 버튼이 계속 보인다.</li>
+      <li>형광펜/메모 후 <b>원본에 저장</b>을 누르면 기존 경로·기존 파일명 그대로 덮어쓴다.</li>
+      <li><b>복사본 저장</b>은 같은 폴더에 <code>_annotated.pdf</code> 파일을 만든다.</li>
     </ol>
-    <p class="warning">이 테스트 버전은 PDF의 기존 주석 객체를 편집하는 방식이 아니라, 보이는 형광 표시와 메모 박스를 PDF 페이지에 새로 그려 저장하는 방식입니다.</p>
   </section>
 </main>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
-<script src="./app.js"></script>
+<script src="./shared.js"></script>
+<script src="./main.js"></script>
 </body>
 </html>
