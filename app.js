@@ -1,237 +1,39 @@
-
-let rootHandle = null;
-let pdfItems = [];
-
-const $ = id => document.getElementById(id);
-const chooseBtn = $("chooseBtn");
-const reopenBtn = $("reopenBtn");
-const scanBtn = $("scanBtn");
-const searchBox = $("searchBox");
-const pdfBody = $("pdfBody");
-const statusEl = $("status");
-const secureState = $("secureState");
-const apiState = $("apiState");
-const folderState = $("folderState");
-const pdfState = $("pdfState");
-const apiBadge = $("apiBadge");
-const pathInput = $("pathInput");
-const openPathBtn = $("openPathBtn");
-const copyLinkBtn = $("copyLinkBtn");
-const linkPreview = $("linkPreview");
-
-function setStatus(msg){ statusEl.textContent = msg; }
-
-function updateEnvironment(){
-  const secure = window.isSecureContext;
-  const supported = "showDirectoryPicker" in window;
-  secureState.textContent = secure ? "정상(HTTPS)" : "아님";
-  apiState.textContent = supported ? "지원됨" : "지원 안 됨";
-  if(secure && supported){
-    apiBadge.textContent = "Chrome/Edge 사용 가능";
-    apiBadge.className = "badge ok";
-  }else{
-    apiBadge.textContent = "환경 확인 필요";
-    apiBadge.className = "badge bad";
-  }
-}
-
-function formatBytes(bytes){
-  if(bytes < 1024) return bytes + " B";
-  if(bytes < 1024**2) return (bytes/1024).toFixed(1) + " KB";
-  return (bytes/1024**2).toFixed(1) + " MB";
-}
-function normalizePath(path){ return path.replaceAll("\\","/").replace(/^\/+/,""); }
-
-function pageBaseUrl(){
-  return new URL("./", location.href);
-}
-function updateLinkPreview(){
-  const value = pathInput.value.trim() || "AI/kim2026.pdf";
-  const url = pageBaseUrl();
-  url.searchParams.set("file", normalizePath(value));
-  linkPreview.textContent = url.toString();
-}
-pathInput.addEventListener("input", updateLinkPreview);
-
-function openDb(){
-  return new Promise((resolve,reject)=>{
-    const req = indexedDB.open("paper-folder-test",1);
-    req.onupgradeneeded = ()=>{
-      if(!req.result.objectStoreNames.contains("handles")) req.result.createObjectStore("handles");
-    };
-    req.onsuccess = ()=>resolve(req.result);
-    req.onerror = ()=>reject(req.error);
-  });
-}
-async function saveHandle(handle){
-  const db = await openDb();
-  return new Promise((resolve,reject)=>{
-    const tx = db.transaction("handles","readwrite");
-    tx.objectStore("handles").put(handle,"root");
-    tx.oncomplete = resolve;
-    tx.onerror = ()=>reject(tx.error);
-  });
-}
-async function loadHandle(){
-  const db = await openDb();
-  return new Promise((resolve,reject)=>{
-    const tx = db.transaction("handles","readonly");
-    const req = tx.objectStore("handles").get("root");
-    req.onsuccess = ()=>resolve(req.result || null);
-    req.onerror = ()=>reject(req.error);
-  });
-}
-async function ensureReadPermission(handle, mayPrompt=true){
-  if(!handle) return false;
-  const options = {mode:"read"};
-  if(await handle.queryPermission(options) === "granted") return true;
-  if(!mayPrompt) return false;
-  return await handle.requestPermission(options) === "granted";
-}
-
-async function walkDirectory(dirHandle,prefix=""){
-  const items=[];
-  for await(const [name,handle] of dirHandle.entries()){
-    const relativePath = prefix ? `${prefix}/${name}` : name;
-    if(handle.kind === "directory"){
-      items.push(...await walkDirectory(handle,relativePath));
-    }else if(handle.kind === "file" && name.toLowerCase().endsWith(".pdf")){
-      const file = await handle.getFile();
-      items.push({name,path:relativePath,size:file.size,handle});
-    }
-  }
-  return items;
-}
-
-async function scanPdfs({mayPrompt=true}={}){
-  if(!rootHandle) return false;
-  const ok = await ensureReadPermission(rootHandle,mayPrompt);
-  if(!ok){
-    setStatus('저장된 폴더는 있지만 접근 권한 확인이 필요합니다. "이전 폴더 다시 열기"를 눌러 주세요.');
-    return false;
-  }
-  folderState.textContent = rootHandle.name;
-  setStatus(`"${rootHandle.name}" 폴더를 검색하는 중...`);
-  pdfItems = await walkDirectory(rootHandle);
-  pdfItems.sort((a,b)=>a.path.localeCompare(b.path,"ko"));
-  pdfState.textContent = `${pdfItems.length}개`;
-  scanBtn.disabled = false;
-  setStatus(`"${rootHandle.name}"에서 PDF ${pdfItems.length}개를 찾았습니다.`);
-  renderTable();
-  return true;
-}
-
-function renderTable(){
-  const q = searchBox.value.trim().toLowerCase();
-  const filtered = pdfItems.filter(item =>
-    item.name.toLowerCase().includes(q) || item.path.toLowerCase().includes(q)
-  );
-  pdfBody.replaceChildren();
-
-  if(!filtered.length){
-    const tr=document.createElement("tr");
-    const td=document.createElement("td");
-    td.colSpan=4; td.className="empty";
-    td.textContent = pdfItems.length ? "검색 결과가 없습니다." : "PDF가 없습니다.";
-    tr.appendChild(td); pdfBody.appendChild(tr); return;
-  }
-
-  for(const item of filtered){
-    const tr=document.createElement("tr");
-    const tdName=document.createElement("td"); tdName.textContent=item.name;
-    const tdPath=document.createElement("td"); tdPath.textContent=item.path; tdPath.className="path";
-    const tdSize=document.createElement("td"); tdSize.textContent=formatBytes(item.size);
-    const tdAction=document.createElement("td");
-    const btn=document.createElement("button"); btn.textContent="PDF 보기"; btn.className="open-btn";
-    btn.addEventListener("click",()=>openPdf(item.handle));
-    tdAction.appendChild(btn);
-    tr.append(tdName,tdPath,tdSize,tdAction); pdfBody.appendChild(tr);
-  }
-}
-searchBox.addEventListener("input",renderTable);
-
-async function openPdf(fileHandle){
-  try{
-    const file = await fileHandle.getFile();
-    const url = URL.createObjectURL(file);
-    const win = window.open(url,"_blank");
-    if(!win){ alert("팝업이 차단되었습니다. 이 사이트의 팝업을 허용해 주세요."); return; }
-    setTimeout(()=>URL.revokeObjectURL(url),120000);
-  }catch(err){
-    console.error(err);
-    alert("PDF를 열지 못했습니다: " + err.message);
-  }
-}
-
-async function openRelativePath(relativePath){
-  const normalized = normalizePath(relativePath);
-  if(!normalized){ alert("상대경로를 입력해 주세요."); return; }
-  if(!rootHandle){ setStatus("먼저 논문 폴더를 선택해 주세요."); return; }
-  if(!pdfItems.length){
-    const scanned = await scanPdfs({mayPrompt:true});
-    if(!scanned) return;
-  }
-  const found = pdfItems.find(item => normalizePath(item.path) === normalized);
-  if(!found){ setStatus(`찾지 못했습니다: ${normalized}`); return; }
-  setStatus(`찾았습니다: ${normalized}`);
-  await openPdf(found.handle);
-}
-
-chooseBtn.addEventListener("click", async()=>{
-  if(!("showDirectoryPicker" in window)){
-    alert("최신 Chrome 또는 Edge에서 사용해 주세요.");
-    return;
-  }
-  try{
-    rootHandle = await window.showDirectoryPicker({id:"paper-library-root",mode:"read"});
-    await saveHandle(rootHandle);
-    await scanPdfs({mayPrompt:true});
-    const queryPath = new URLSearchParams(location.search).get("file");
-    if(queryPath){ pathInput.value=queryPath; updateLinkPreview(); }
-  }catch(err){
-    if(err.name !== "AbortError") alert("폴더를 열지 못했습니다: " + err.message);
-  }
-});
-
-reopenBtn.addEventListener("click", async()=>{
-  try{
-    rootHandle = await loadHandle();
-    if(!rootHandle){ alert('저장된 폴더가 없습니다. 먼저 "논문 폴더 선택"을 눌러 주세요.'); return; }
-    await scanPdfs({mayPrompt:true});
-  }catch(err){
-    alert("이전 폴더를 다시 열지 못했습니다: " + err.message);
-  }
-});
-
-scanBtn.addEventListener("click",()=>scanPdfs({mayPrompt:true}));
-openPathBtn.addEventListener("click",()=>openRelativePath(pathInput.value));
-
-copyLinkBtn.addEventListener("click",async()=>{
-  updateLinkPreview();
-  try{
-    await navigator.clipboard.writeText(linkPreview.textContent);
-    setStatus("테스트 링크를 클립보드에 복사했습니다.");
-  }catch{
-    alert("링크 복사에 실패했습니다.");
-  }
-});
-
-(async function init(){
-  updateEnvironment();
-  const queryPath = new URLSearchParams(location.search).get("file");
-  if(queryPath){ pathInput.value=queryPath; }
-  updateLinkPreview();
-
-  try{
-    const saved = await loadHandle();
-    if(!saved) return;
-    rootHandle = saved;
-    folderState.textContent = saved.name;
-    const hasPermission = await ensureReadPermission(saved,false);
-    if(hasPermission){
-      await scanPdfs({mayPrompt:false});
-    }else{
-      setStatus(`이전에 선택한 폴더 "${saved.name}"가 저장되어 있습니다. "이전 폴더 다시 열기"를 눌러 주세요.`);
-    }
-  }catch(err){ console.error(err); }
-})();
+pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+let rootHandle=null,pdfItems=[],currentItem=null,pdfJsDoc=null,originalBytes=null,pageNumber=1,renderScale=1.35,currentTool='highlight';
+const annotations={};
+const $=id=>document.getElementById(id);
+const statusEl=$('status'),envBadge=$('envBadge'),chooseFolderBtn=$('chooseFolderBtn'),reopenFolderBtn=$('reopenFolderBtn'),rescanBtn=$('rescanBtn'),searchBox=$('searchBox'),pdfBody=$('pdfBody'),pdfCount=$('pdfCount'),editorCard=$('editorCard'),currentFile=$('currentFile'),prevPageBtn=$('prevPageBtn'),nextPageBtn=$('nextPageBtn'),pageNum=$('pageNum'),pageCount=$('pageCount'),pdfCanvas=$('pdfCanvas'),overlayCanvas=$('overlayCanvas'),highlightToolBtn=$('highlightToolBtn'),noteToolBtn=$('noteToolBtn'),noteText=$('noteText'),undoBtn=$('undoBtn'),clearPageBtn=$('clearPageBtn'),instructionText=$('instructionText'),saveCopyBtn=$('saveCopyBtn'),saveNameHint=$('saveNameHint');
+let dragStart=null,dragCurrent=null;
+function setStatus(m){statusEl.textContent=m}
+function updateEnvironment(){const ok=window.isSecureContext&&('showDirectoryPicker'in window);envBadge.textContent=ok?'Chrome/Edge 사용 가능':'환경 확인 필요';envBadge.className=ok?'badge ok':'badge bad'}
+function fmtBytes(n){if(n<1024)return n+' B';if(n<1024**2)return(n/1024).toFixed(1)+' KB';return(n/1024**2).toFixed(1)+' MB'}
+function openDb(){return new Promise((resolve,reject)=>{const r=indexedDB.open('pdf-annotation-test-db',1);r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains('handles'))r.result.createObjectStore('handles')};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}
+async function saveRootHandle(h){const db=await openDb();return new Promise((resolve,reject)=>{const tx=db.transaction('handles','readwrite');tx.objectStore('handles').put(h,'root');tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)})}
+async function loadRootHandle(){const db=await openDb();return new Promise((resolve,reject)=>{const r=db.transaction('handles','readonly').objectStore('handles').get('root');r.onsuccess=()=>resolve(r.result||null);r.onerror=()=>reject(r.error)})}
+async function ensureRW(h,mayPrompt=true){const opt={mode:'readwrite'};if(await h.queryPermission(opt)==='granted')return true;if(!mayPrompt)return false;return await h.requestPermission(opt)==='granted'}
+async function walk(dir,prefix=''){const out=[];for await(const[name,h]of dir.entries()){const rel=prefix?`${prefix}/${name}`:name;if(h.kind==='directory')out.push(...await walk(h,rel));else if(h.kind==='file'&&name.toLowerCase().endsWith('.pdf')){const f=await h.getFile();out.push({name,path:rel,size:f.size,fileHandle:h,parentHandle:dir})}}return out}
+async function scanPdfs(mayPrompt=true){if(!rootHandle)return false;if(!await ensureRW(rootHandle,mayPrompt)){setStatus('폴더 읽기/쓰기 권한이 필요합니다. "이전 폴더 다시 열기"를 눌러 권한을 허용하세요.');return false}setStatus(`"${rootHandle.name}" 폴더의 PDF를 검색하는 중...`);pdfItems=await walk(rootHandle);pdfItems.sort((a,b)=>a.path.localeCompare(b.path,'ko'));rescanBtn.disabled=false;setStatus(`PDF ${pdfItems.length}개를 찾았습니다.`);renderList();return true}
+function renderList(){const q=searchBox.value.trim().toLowerCase();const items=pdfItems.filter(x=>x.name.toLowerCase().includes(q)||x.path.toLowerCase().includes(q));pdfCount.textContent=`PDF ${items.length}개`;pdfBody.replaceChildren();if(!items.length){const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=4;td.className='empty';td.textContent='PDF가 없습니다.';tr.appendChild(td);pdfBody.appendChild(tr);return}for(const item of items){const tr=document.createElement('tr'),td1=document.createElement('td'),td2=document.createElement('td'),td3=document.createElement('td'),td4=document.createElement('td');td1.textContent=item.name;td2.textContent=item.path;td2.className='path';td3.textContent=fmtBytes(item.size);const b=document.createElement('button');b.textContent='편집';b.onclick=()=>openEditor(item);td4.appendChild(b);tr.append(td1,td2,td3,td4);pdfBody.appendChild(tr)}}
+searchBox.oninput=renderList;
+async function openEditor(item){try{currentItem=item;const file=await item.fileHandle.getFile();originalBytes=new Uint8Array(await file.arrayBuffer());pdfJsDoc=await pdfjsLib.getDocument({data:originalBytes.slice()}).promise;pageNumber=1;for(const k of Object.keys(annotations))delete annotations[k];currentFile.textContent=item.path;pageCount.textContent=pdfJsDoc.numPages;editorCard.classList.remove('hidden');const stem=item.name.toLowerCase().endsWith('.pdf')?item.name.slice(0,-4):item.name;saveNameHint.textContent=`저장 예정: ${stem}_annotated.pdf`;await renderPage();editorCard.scrollIntoView({behavior:'smooth',block:'start'})}catch(e){console.error(e);alert('PDF를 열지 못했습니다: '+e.message)}}
+async function renderPage(){if(!pdfJsDoc)return;const page=await pdfJsDoc.getPage(pageNumber),viewport=page.getViewport({scale:renderScale});pdfCanvas.width=Math.floor(viewport.width);pdfCanvas.height=Math.floor(viewport.height);overlayCanvas.width=pdfCanvas.width;overlayCanvas.height=pdfCanvas.height;const ctx=pdfCanvas.getContext('2d');await page.render({canvasContext:ctx,viewport}).promise;pageNum.textContent=pageNumber;prevPageBtn.disabled=pageNumber<=1;nextPageBtn.disabled=pageNumber>=pdfJsDoc.numPages;redrawOverlay()}
+function pageAnnots(){if(!annotations[pageNumber])annotations[pageNumber]=[];return annotations[pageNumber]}
+function canvasPoint(evt){const r=overlayCanvas.getBoundingClientRect();return{x:(evt.clientX-r.left)*(overlayCanvas.width/r.width),y:(evt.clientY-r.top)*(overlayCanvas.height/r.height)}}
+function canvasToPdf(pt){return{x:pt.x/renderScale,y:(overlayCanvas.height-pt.y)/renderScale}}
+function pdfRectToCanvas(a){return{x:a.x*renderScale,y:overlayCanvas.height-(a.y+a.h)*renderScale,w:a.w*renderScale,h:a.h*renderScale}}
+function wrapText(ctx,text,maxWidth){const lines=[];let line='';for(const ch of[...text]){const test=line+ch;if(ctx.measureText(test).width>maxWidth&&line){lines.push(line);line=ch}else line=test}if(line)lines.push(line);return lines}
+function drawNotePreview(ctx,x,y,w,h,text){ctx.save();ctx.fillStyle='rgba(255,248,196,.96)';ctx.strokeStyle='rgba(161,98,7,.85)';ctx.lineWidth=1.2;ctx.fillRect(x,y,w,h);ctx.strokeRect(x,y,w,h);ctx.fillStyle='#3f2d00';ctx.font='14px system-ui,sans-serif';wrapText(ctx,text,Math.max(20,w-12)).slice(0,6).forEach((line,i)=>ctx.fillText(line,x+6,y+20+i*18));ctx.restore()}
+function redrawOverlay(){const ctx=overlayCanvas.getContext('2d');ctx.clearRect(0,0,overlayCanvas.width,overlayCanvas.height);for(const a of(annotations[pageNumber]||[])){const r=pdfRectToCanvas(a);if(a.type==='highlight'){ctx.save();ctx.fillStyle='rgba(255,235,59,.38)';ctx.fillRect(r.x,r.y,r.w,r.h);ctx.restore()}else if(a.type==='note')drawNotePreview(ctx,r.x,r.y,r.w,r.h,a.text)}if(dragStart&&dragCurrent&&currentTool==='highlight'){const x=Math.min(dragStart.x,dragCurrent.x),y=Math.min(dragStart.y,dragCurrent.y),w=Math.abs(dragCurrent.x-dragStart.x),h=Math.abs(dragCurrent.y-dragStart.y);ctx.save();ctx.fillStyle='rgba(255,235,59,.28)';ctx.strokeStyle='rgba(202,138,4,.9)';ctx.lineWidth=1.5;ctx.fillRect(x,y,w,h);ctx.strokeRect(x,y,w,h);ctx.restore()}}
+function setTool(tool){currentTool=tool;highlightToolBtn.classList.toggle('active',tool==='highlight');noteToolBtn.classList.toggle('active',tool==='note');instructionText.textContent=tool==='highlight'?'형광펜: PDF 위에서 원하는 영역을 마우스로 드래그하세요.':'메모: 메모 내용을 입력한 뒤 PDF에서 메모를 놓을 위치를 클릭하세요.';overlayCanvas.style.cursor=tool==='highlight'?'crosshair':'copy'}
+highlightToolBtn.onclick=()=>setTool('highlight');noteToolBtn.onclick=()=>setTool('note');
+overlayCanvas.addEventListener('pointerdown',evt=>{if(!pdfJsDoc)return;if(currentTool==='highlight'){dragStart=canvasPoint(evt);dragCurrent=dragStart;overlayCanvas.setPointerCapture(evt.pointerId)}});
+overlayCanvas.addEventListener('pointermove',evt=>{if(currentTool==='highlight'&&dragStart){dragCurrent=canvasPoint(evt);redrawOverlay()}});
+overlayCanvas.addEventListener('pointerup',evt=>{if(currentTool!=='highlight'||!dragStart)return;dragCurrent=canvasPoint(evt);const x1=Math.min(dragStart.x,dragCurrent.x),x2=Math.max(dragStart.x,dragCurrent.x),y1=Math.min(dragStart.y,dragCurrent.y),y2=Math.max(dragStart.y,dragCurrent.y);if(x2-x1>5&&y2-y1>5){const bl=canvasToPdf({x:x1,y:y2}),tr=canvasToPdf({x:x2,y:y1});pageAnnots().push({type:'highlight',x:bl.x,y:bl.y,w:tr.x-bl.x,h:tr.y-bl.y})}dragStart=null;dragCurrent=null;redrawOverlay()});
+overlayCanvas.addEventListener('click',evt=>{if(currentTool!=='note'||!pdfJsDoc)return;const text=noteText.value.trim();if(!text){alert('먼저 메모 내용을 입력해 주세요.');return}const p=canvasPoint(evt),wC=Math.min(260,Math.max(160,overlayCanvas.width*.28)),hC=105;let xC=p.x,yC=p.y;if(xC+wC>overlayCanvas.width)xC=overlayCanvas.width-wC-5;if(yC+hC>overlayCanvas.height)yC=overlayCanvas.height-hC-5;const bl=canvasToPdf({x:xC,y:yC+hC});pageAnnots().push({type:'note',x:bl.x,y:bl.y,w:wC/renderScale,h:hC/renderScale,text});redrawOverlay()});
+undoBtn.onclick=()=>{const arr=annotations[pageNumber]||[];if(arr.length){arr.pop();redrawOverlay()}};clearPageBtn.onclick=()=>{if(confirm('현재 페이지에서 추가한 주석을 모두 지울까요?')){annotations[pageNumber]=[];redrawOverlay()}};
+prevPageBtn.onclick=async()=>{if(pageNumber>1){pageNumber--;await renderPage()}};nextPageBtn.onclick=async()=>{if(pdfJsDoc&&pageNumber<pdfJsDoc.numPages){pageNumber++;await renderPage()}};
+async function makeNotePng(text,widthPx=520,heightPx=210){const c=document.createElement('canvas');c.width=widthPx;c.height=heightPx;const ctx=c.getContext('2d');ctx.fillStyle='#fff8c4';ctx.fillRect(0,0,c.width,c.height);ctx.strokeStyle='#a16207';ctx.lineWidth=3;ctx.strokeRect(1.5,1.5,c.width-3,c.height-3);ctx.fillStyle='#3f2d00';ctx.font='28px system-ui,-apple-system,"Segoe UI",sans-serif';wrapText(ctx,text,c.width-32).slice(0,6).forEach((line,i)=>ctx.fillText(line,16,42+i*31));const blob=await new Promise(resolve=>c.toBlob(resolve,'image/png'));return new Uint8Array(await blob.arrayBuffer())}
+saveCopyBtn.onclick=async()=>{if(!currentItem||!originalBytes)return;try{saveCopyBtn.disabled=true;setStatus('수정된 PDF를 만드는 중...');const{PDFDocument,rgb}=PDFLib;const doc=await PDFDocument.load(originalBytes.slice());const pages=doc.getPages();for(const[pageKey,list]of Object.entries(annotations)){const idx=Number(pageKey)-1,page=pages[idx];if(!page)continue;for(const a of list){if(a.type==='highlight'){page.drawRectangle({x:a.x,y:a.y,width:a.w,height:a.h,color:rgb(1,.92,.18),opacity:.34,borderWidth:0})}else if(a.type==='note'){const pngBytes=await makeNotePng(a.text),img=await doc.embedPng(pngBytes);page.drawImage(img,{x:a.x,y:a.y,width:a.w,height:a.h,opacity:.98})}}}const newBytes=await doc.save();const stem=currentItem.name.toLowerCase().endsWith('.pdf')?currentItem.name.slice(0,-4):currentItem.name,newName=`${stem}_annotated.pdf`;if(!await ensureRW(currentItem.parentHandle,true))throw new Error('저장 폴더에 쓰기 권한이 없습니다.');const newHandle=await currentItem.parentHandle.getFileHandle(newName,{create:true}),writable=await newHandle.createWritable();await writable.write(newBytes);await writable.close();setStatus(`저장 완료: ${currentItem.path.replace(currentItem.name,newName)}`);alert(`저장했습니다.\n\n${newName}\n\n원본 PDF는 변경하지 않았습니다.`);await scanPdfs(false)}catch(e){console.error(e);alert('저장하지 못했습니다: '+e.message);setStatus('저장 중 오류가 발생했습니다.')}finally{saveCopyBtn.disabled=false}};
+chooseFolderBtn.onclick=async()=>{if(!('showDirectoryPicker'in window)){alert('최신 Chrome 또는 Edge를 사용해 주세요.');return}try{rootHandle=await window.showDirectoryPicker({id:'paper-annotation-root',mode:'readwrite'});await saveRootHandle(rootHandle);await scanPdfs(true)}catch(e){if(e.name!=='AbortError')alert('폴더를 열지 못했습니다: '+e.message)}};
+reopenFolderBtn.onclick=async()=>{rootHandle=await loadRootHandle();if(!rootHandle){alert('저장된 폴더가 없습니다.');return}await scanPdfs(true)};rescanBtn.onclick=()=>scanPdfs(true);
+(async()=>{updateEnvironment();try{const saved=await loadRootHandle();if(saved){rootHandle=saved;const granted=await ensureRW(saved,false);if(granted)await scanPdfs(false);else setStatus(`이전에 선택한 폴더 "${saved.name}"가 저장되어 있습니다. "이전 폴더 다시 열기"를 눌러 주세요.`)}}catch(e){console.error(e)}})();

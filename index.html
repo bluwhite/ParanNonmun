@@ -1,87 +1,94 @@
 <!doctype html>
 <html lang="ko">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>로컬 PDF 폴더 테스트</title>
-  <meta name="theme-color" content="#111827" />
-  <link rel="manifest" href="./manifest.webmanifest" />
-  <link rel="stylesheet" href="./styles.css" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>로컬 PDF 주석 테스트</title>
+  <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-  <main class="wrap">
-    <header class="hero">
-      <div>
-        <div class="eyebrow">GitHub Pages 테스트</div>
-        <h1>로컬 PDF 폴더 연결</h1>
-        <p>PDF는 업로드하지 않습니다. Chrome/Edge가 사용자가 직접 선택한 로컬 폴더만 읽습니다.</p>
-      </div>
-      <div id="apiBadge" class="badge">환경 확인 중</div>
-    </header>
+<main class="wrap">
+  <header class="hero">
+    <div>
+      <div class="eyebrow">GitHub Pages · 로컬 PDF 편집 실험</div>
+      <h1>PDF 메모·형광펜 저장 테스트</h1>
+      <p>PDF는 서버에 업로드하지 않습니다. Chrome/Edge에서 선택한 로컬 폴더의 파일을 브라우저 안에서 읽고 수정본을 같은 폴더에 저장합니다.</p>
+    </div>
+    <div id="envBadge" class="badge">환경 확인 중</div>
+  </header>
 
-    <section class="card">
-      <h2>1. 논문 폴더 연결</h2>
-      <div class="buttons">
-        <button id="chooseBtn" class="primary">논문 폴더 선택</button>
-        <button id="reopenBtn">이전 폴더 다시 열기</button>
-        <button id="scanBtn" disabled>PDF 다시 검색</button>
-      </div>
-      <div id="status" class="status">아직 폴더를 선택하지 않았습니다.</div>
+  <section class="card">
+    <h2>1. 논문 폴더 선택</h2>
+    <div class="buttons">
+      <button id="chooseFolderBtn" class="primary">논문 폴더 선택</button>
+      <button id="reopenFolderBtn">이전 폴더 다시 열기</button>
+      <button id="rescanBtn" disabled>PDF 다시 검색</button>
+    </div>
+    <div id="status" class="status">아직 폴더를 선택하지 않았습니다.</div>
+  </section>
 
-      <div class="diagnostics">
-        <div><span>보안 연결</span><strong id="secureState">-</strong></div>
-        <div><span>폴더 API</span><strong id="apiState">-</strong></div>
-        <div><span>현재 폴더</span><strong id="folderState">없음</strong></div>
-        <div><span>찾은 PDF</span><strong id="pdfState">0개</strong></div>
-      </div>
-    </section>
+  <section class="card">
+    <div class="section-head">
+      <div><h2>2. PDF 선택</h2><p id="pdfCount">PDF 0개</p></div>
+      <input id="searchBox" type="search" placeholder="파일명 또는 경로 검색">
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>파일명</th><th>상대경로</th><th>크기</th><th></th></tr></thead>
+        <tbody id="pdfBody"><tr><td colspan="4" class="empty">폴더를 선택하면 PDF 목록이 표시됩니다.</td></tr></tbody>
+      </table>
+    </div>
+  </section>
 
-    <section class="card">
-      <div class="section-head">
-        <div>
-          <h2>2. PDF 목록</h2>
-          <p>선택한 폴더의 하위 폴더까지 검색합니다.</p>
-        </div>
-        <input id="searchBox" type="search" placeholder="파일명 또는 상대경로 검색" />
+  <section id="editorCard" class="card hidden">
+    <div class="editor-head">
+      <div><h2>3. PDF 편집</h2><p id="currentFile">선택된 파일 없음</p></div>
+      <div class="page-controls">
+        <button id="prevPageBtn">◀ 이전</button>
+        <span><b id="pageNum">1</b> / <span id="pageCount">1</span></span>
+        <button id="nextPageBtn">다음 ▶</button>
       </div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr><th>파일명</th><th>상대경로</th><th>크기</th><th></th></tr>
-          </thead>
-          <tbody id="pdfBody">
-            <tr><td colspan="4" class="empty">폴더를 선택하면 PDF 목록이 표시됩니다.</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
+    </div>
 
-    <section class="card">
-      <h2>3. Google Sheets 연결 방식 테스트</h2>
-      <p>나중에는 Google Sheets의 <b>PDF 열기</b> 링크가 이 웹앱에 상대경로를 전달하게 할 수 있습니다.</p>
-      <div class="link-test">
-        <input id="pathInput" type="text" placeholder="예: AI/kim2026.pdf" />
-        <button id="openPathBtn" class="primary">이 상대경로 열기</button>
-        <button id="copyLinkBtn">테스트 링크 복사</button>
+    <div class="toolbox">
+      <button id="highlightToolBtn" class="tool active">형광펜</button>
+      <button id="noteToolBtn" class="tool">메모</button>
+      <button id="undoBtn">현재 페이지 마지막 작업 취소</button>
+      <button id="clearPageBtn">현재 페이지 주석 지우기</button>
+      <div class="note-input-wrap">
+        <label for="noteText">메모 내용</label>
+        <input id="noteText" type="text" placeholder="메모 모드에서 입력 후 PDF의 위치를 클릭">
       </div>
-      <div class="example">
-        현재 형식: <code id="linkPreview"></code>
-      </div>
-      <p class="small">브라우저 보안 정책 때문에 저장된 폴더의 권한을 다시 한 번 확인해야 할 때가 있습니다.</p>
-    </section>
+    </div>
 
-    <section class="card help">
-      <h2>테스트 성공 기준</h2>
-      <ol>
-        <li>폴더 선택 창이 열린다.</li>
-        <li>선택한 폴더와 하위 폴더의 PDF가 목록에 나온다.</li>
-        <li><b>PDF 보기</b>를 누르면 새 탭에서 PDF가 열린다.</li>
-        <li>다시 접속한 뒤 <b>이전 폴더 다시 열기</b>가 동작한다.</li>
-        <li>상대경로를 넣어 특정 PDF를 열 수 있다.</li>
-      </ol>
-    </section>
-  </main>
+    <div class="instructions" id="instructionText">형광펜: PDF 위에서 원하는 영역을 마우스로 드래그하세요.</div>
 
-  <script src="./app.js"></script>
+    <div id="viewerWrap" class="viewer-wrap">
+      <canvas id="pdfCanvas"></canvas>
+      <canvas id="overlayCanvas"></canvas>
+    </div>
+
+    <div class="savebar">
+      <button id="saveCopyBtn" class="primary">수정본 새 파일로 저장</button>
+      <span id="saveNameHint"></span>
+    </div>
+  </section>
+
+  <section class="card info">
+    <h2>이번 샘플에서 확인할 것</h2>
+    <ol>
+      <li>로컬 PDF를 웹앱 안에서 직접 표시할 수 있는지</li>
+      <li>형광펜 표시를 마우스로 추가할 수 있는지</li>
+      <li>한국어 메모를 원하는 위치에 추가할 수 있는지</li>
+      <li><b>수정본 새 파일로 저장</b>을 누르면 원본 옆에 <code>_annotated.pdf</code>가 생성되는지</li>
+      <li>생성된 PDF를 Acrobat/Preview/Chrome에서 열었을 때 표시가 실제 PDF 안에 남아 있는지</li>
+    </ol>
+    <p class="warning">이 테스트 버전은 PDF의 기존 주석 객체를 편집하는 방식이 아니라, 보이는 형광 표시와 메모 박스를 PDF 페이지에 새로 그려 저장하는 방식입니다.</p>
+  </section>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<script src="./app.js"></script>
 </body>
 </html>
