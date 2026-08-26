@@ -1,4 +1,4 @@
-/* 파란 논문 v0.13.0 - 참고문헌 출력 + 글자/문단 서식 */
+/* 파란 논문 v0.13.5 - Word/아래한글 분리 복사 */
 (function(global){
   "use strict";
 
@@ -195,43 +195,114 @@
     return `"${escaped}",${fallback}`;
   }
 
-  function referenceStyleCss(style){
+  function referenceMetrics(style){
     const s=global.ParanPaperData.normalizeReferenceStyle(style);
 
-    // 아래한글의
-    //   왼쪽 여백 6pt + 첫 줄 내어쓰기 30pt
-    // 를 CSS hanging indent로 옮기려면
-    //   문단 왼쪽 위치 = 6 + 30 = 36pt
-    //   첫 줄 text-indent = -30pt
-    // 가 되어야 한다.
-    const hanging=Math.max(0,Number(s.hangingIndentPt)||0);
-    const paragraphLeft=
-      Math.max(0,Number(s.leftIndentPt)||0)+hanging;
+    const hanging=Math.max(
+      0,
+      Number(s.hangingIndentPt)||0
+    );
 
-    const letterSpacingEm=
-      Number(s.letterSpacingPercent||0)/100;
+    const paragraphLeft=
+      Math.max(
+        0,
+        Number(s.leftIndentPt)||0
+      )+hanging;
+
+    return {
+      s,
+      hanging,
+      paragraphLeft,
+      lineRatio:Math.max(
+        0.8,
+        Number(s.lineHeightPercent||100)/100
+      ),
+      letterSpacingEm:
+        Number(s.letterSpacingPercent||0)/100
+    };
+  }
+
+  function previewStyleCss(style){
+    const {
+      s,
+      hanging,
+      paragraphLeft,
+      lineRatio,
+      letterSpacingEm
+    }=referenceMetrics(style);
 
     return [
       `font-family:${cssFontFamily(s.fontFamily)}`,
       `font-size:${s.fontSizePt}pt`,
       `font-stretch:${s.fontScalePercent}%`,
       `letter-spacing:${letterSpacingEm}em`,
-      `line-height:${s.lineHeightPercent}%`,
+      `line-height:${lineRatio}`,
       `margin-top:${s.spaceBeforePt}pt`,
       `margin-right:${s.rightIndentPt}pt`,
       `margin-bottom:${s.spaceAfterPt}pt`,
       `margin-left:${paragraphLeft}pt`,
-      `padding-left:0pt`,
+      "padding:0",
       `text-indent:-${hanging}pt`,
       `text-align:${s.alignment}`,
       "font-weight:normal"
     ].join(";");
   }
 
-  function referenceTextCss(style){
-    const s=global.ParanPaperData.normalizeReferenceStyle(style);
-    const letterSpacingEm=
-      Number(s.letterSpacingPercent||0)/100;
+  function hwpStyleCss(style){
+    const {
+      s,
+      hanging,
+      paragraphLeft,
+      lineRatio,
+      letterSpacingEm
+    }=referenceMetrics(style);
+
+    return [
+      `font-family:${cssFontFamily(s.fontFamily)}`,
+      `font-size:${s.fontSizePt}pt`,
+      `font-stretch:${s.fontScalePercent}%`,
+      `letter-spacing:${letterSpacingEm}em`,
+      `line-height:${lineRatio}`,
+      `margin-top:${s.spaceBeforePt}pt`,
+      `margin-right:${s.rightIndentPt}pt`,
+      `margin-bottom:${s.spaceAfterPt}pt`,
+      `margin-left:${paragraphLeft}pt`,
+      "padding:0",
+      `text-indent:-${hanging}pt`,
+      `text-align:${s.alignment}`,
+      "font-weight:normal"
+    ].join(";");
+  }
+
+  function wordParagraphCss(style){
+    const {
+      s,
+      hanging,
+      paragraphLeft,
+      lineRatio
+    }=referenceMetrics(style);
+
+    return [
+      `margin-top:${s.spaceBeforePt}pt`,
+      `margin-right:${s.rightIndentPt}pt`,
+      `margin-bottom:${s.spaceAfterPt}pt`,
+      `margin-left:${paragraphLeft}pt`,
+      `mso-margin-top-alt:${s.spaceBeforePt}pt`,
+      `mso-margin-bottom-alt:${s.spaceAfterPt}pt`,
+      "padding:0",
+      `text-indent:-${hanging}pt`,
+      `line-height:${lineRatio}`,
+      "mso-line-height-rule:auto",
+      `text-align:${s.alignment}`,
+      "mso-pagination:widow-orphan"
+    ].join(";");
+  }
+
+  function wordTextCss(style){
+    const {
+      s,
+      letterSpacingEm
+    }=referenceMetrics(style);
 
     return [
       `font-family:${cssFontFamily(s.fontFamily)}`,
@@ -312,7 +383,7 @@
     content.innerHTML=html;
     content.setAttribute(
       "style",
-      referenceStyleCss(style)
+      previewStyleCss(style)
     );
 
     const plain=plainTextFromHtml(html);
@@ -538,18 +609,21 @@
       .join("\n");
   }
 
-  function richOutputHtml(){
+  function wordOutputHtml(){
     const items=[
       ...$("referenceOutputArea")
         .querySelectorAll(".reference-output-item")
     ];
 
     const body=items.map(item=>{
-      const content=item.querySelector(".reference-output-content");
-      let style;
+      const content=
+        item.querySelector(".reference-output-content");
 
+      let style;
       try{
-        style=JSON.parse(item.dataset.referenceStyle || "{}");
+        style=JSON.parse(
+          item.dataset.referenceStyle || "{}"
+        );
       }catch(_e){
         style={};
       }
@@ -559,35 +633,38 @@
       );
 
       return (
-        `<div style="${referenceStyleCss(style)}">`+
-        `<span style="${referenceTextCss(style)}">`+
+        `<p style="${wordParagraphCss(style)}">`+
+        `<span style="${wordTextCss(style)}">`+
         html+
-        "</span></div>"
+        "</span></p>"
       );
     }).join("");
 
     return (
-      '<div style="background:#ffffff;color:#000000;">'+
+      '<html xmlns:o="urn:schemas-microsoft-com:office:office" '+
+      'xmlns:w="urn:schemas-microsoft-com:office:word">'+
+      '<head><meta charset="utf-8"></head>'+
+      '<body style="margin:0;padding:0;">'+
       body+
-      "</div>"
+      "</body></html>"
     );
   }
 
-
-  function visibleOutputNativeCopy(){
+  function copyVisibleOutput(mode){
     const area=$("referenceOutputArea");
     const items=[
       ...area.querySelectorAll(".reference-output-item")
     ];
 
     if(!items.length){
-      throw new Error("복사할 참고문헌이 없습니다.");
+      throw new Error(
+        "복사할 참고문헌이 없습니다."
+      );
     }
 
-    // 성공했던 독립 테스트 페이지의 fallback과 같은 방식:
-    // 숨은 DOM을 만들지 않고 실제 화면에 보이는 출력 영역을 직접 선택해서 복사한다.
     const selection=window.getSelection();
     const savedRanges=[];
+    const originalStyles=[];
 
     try{
       if(selection){
@@ -598,17 +675,44 @@
         }
       }
 
-      const first=
-        items[0].querySelector(".reference-output-content") ||
-        items[0];
+      area.classList.add("reference-copy-clean");
 
-      const last=
-        items[items.length-1].querySelector(".reference-output-content") ||
-        items[items.length-1];
+      for(const item of items){
+        const content=
+          item.querySelector(".reference-output-content");
+
+        if(!content)continue;
+
+        originalStyles.push({
+          content,
+          style:content.getAttribute("style")
+        });
+
+        let style;
+        try{
+          style=JSON.parse(
+            item.dataset.referenceStyle || "{}"
+          );
+        }catch(_e){
+          style={};
+        }
+
+        content.setAttribute(
+          "style",
+          mode==="word"
+            ? [
+                wordParagraphCss(style),
+                wordTextCss(style)
+              ].join(";")
+            : hwpStyleCss(style)
+        );
+      }
 
       const range=document.createRange();
-      range.setStartBefore(first);
-      range.setEndAfter(last);
+
+      // 맨 앞/뒤 요소의 바깥 경계를 선택하지 않고,
+      // 출력 영역 내부만 선택해 첫 빈 문단 발생을 줄인다.
+      range.selectNodeContents(area);
 
       selection.removeAllRanges();
       selection.addRange(range);
@@ -617,10 +721,23 @@
 
       if(!ok){
         throw new Error(
-          "브라우저가 화면 영역의 서식 복사를 허용하지 않았습니다."
+          "브라우저가 서식 복사를 허용하지 않았습니다."
         );
       }
     }finally{
+      for(const entry of originalStyles){
+        if(entry.style===null){
+          entry.content.removeAttribute("style");
+        }else{
+          entry.content.setAttribute(
+            "style",
+            entry.style
+          );
+        }
+      }
+
+      area.classList.remove("reference-copy-clean");
+
       try{
         selection.removeAllRanges();
 
@@ -631,34 +748,71 @@
     }
   }
 
-  async function clipboardItemRichCopy(){
+  async function copyWord(){
     const plain=plainOutputText();
-    const html=richOutputHtml();
 
-    if(
-      !navigator.clipboard?.write ||
-      !global.ClipboardItem
-    ){
+    if(!plain){
+      setState(
+        "복사할 참고문헌이 없습니다.",
+        "error"
+      );
+      return;
+    }
+
+    const html=wordOutputHtml();
+
+    try{
+      if(
+        navigator.clipboard?.write &&
+        global.ClipboardItem
+      ){
+        const item=new ClipboardItem({
+          "text/plain":new Blob(
+            [plain],
+            {type:"text/plain"}
+          ),
+          "text/html":new Blob(
+            [html],
+            {type:"text/html"}
+          )
+        });
+
+        await navigator.clipboard.write([item]);
+
+        setState(
+          "Word용 복사 완료 · Word에서 Ctrl+V로 붙여 넣으세요.",
+          "saved"
+        );
+        return;
+      }
+
       throw new Error(
         "ClipboardItem을 지원하지 않습니다."
       );
+    }catch(error){
+      console.warn(
+        "Word용 ClipboardItem 복사 실패:",
+        error
+      );
+
+      try{
+        copyVisibleOutput("word");
+
+        setState(
+          "Word용 복사 완료 · Word에서 Ctrl+V로 붙여 넣으세요.",
+          "saved"
+        );
+      }catch(fallbackError){
+        console.error(fallbackError);
+        setState(
+          `Word용 복사 실패: ${fallbackError.message}`,
+          "error"
+        );
+      }
     }
-
-    const item=new ClipboardItem({
-      "text/plain":new Blob(
-        [plain],
-        {type:"text/plain"}
-      ),
-      "text/html":new Blob(
-        [html],
-        {type:"text/html"}
-      )
-    });
-
-    await navigator.clipboard.write([item]);
   }
 
-  async function copyRich(){
+  function copyHwp(){
     const plain=plainOutputText();
 
     if(!plain){
@@ -670,35 +824,18 @@
     }
 
     try{
-      // v0.13.4:
-      // 성공했던 샘플과 동일하게 실제 보이는 출력 DOM을 직접 선택해 copy.
-      // 이 경로가 Word/아래한글의 HTML Format 생성에 가장 잘 맞는다.
-      visibleOutputNativeCopy();
+      copyVisibleOutput("hwp");
 
       setState(
-        "서식 포함 복사 완료 · Word는 Ctrl+V, 아래한글은 반드시 Ctrl+Alt+V → 인터넷 문서로 붙여 넣으세요.",
+        "아래한글용 복사 완료 · 반드시 Ctrl+Alt+V → 인터넷 문서로 붙여 넣으세요.",
         "saved"
       );
-    }catch(nativeError){
-      console.warn(
-        "화면 영역 native copy 실패, ClipboardItem으로 재시도:",
-        nativeError
+    }catch(error){
+      console.error(error);
+      setState(
+        `아래한글용 복사 실패: ${error.message}`,
+        "error"
       );
-
-      try{
-        await clipboardItemRichCopy();
-
-        setState(
-          "서식 포함 복사 완료 · Word는 Ctrl+V, 아래한글은 반드시 Ctrl+Alt+V → 인터넷 문서로 붙여 넣으세요.",
-          "saved"
-        );
-      }catch(error){
-        console.error(error);
-        setState(
-          `서식 포함 복사 실패: ${error.message}`,
-          "error"
-        );
-      }
     }
   }
 
@@ -761,7 +898,8 @@
     $("referenceGenerateBtn").onclick=generate;
     $("referenceSortBtn").onclick=sortKoreanFirst;
     $("referenceSheetOrderBtn").onclick=restoreSheetOrder;
-    $("referenceCopyBtn").onclick=copyRich;
+    $("referenceWordCopyBtn").onclick=copyWord;
+    $("referenceHwpCopyBtn").onclick=copyHwp;
     $("referencePlainCopyBtn").onclick=copyPlain;
     $("referenceOutputCloseBtn").onclick=close;
     $("referenceOutputCloseIconBtn").onclick=close;
