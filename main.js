@@ -4,7 +4,6 @@ let dataStore=null;
 let paperData={columns:[],papers:[],sheetSnapshot:null};
 
 const $=id=>document.getElementById(id);
-const status=$("status");
 
 $("versionBadge").textContent=`v${APP_VERSION}`;
 document.title=`파란 논문 · v${APP_VERSION}`;
@@ -26,11 +25,18 @@ async function walk(dir,prefix=""){
 
 function setFolderReady(ready){
   for(const id of [
-    "scanBtn","noteSearchBtn","addPaperBtn","addColumnBtn",
-    "moveColumnLeftBtn","moveColumnRightBtn","paperFindBtn"
+    "noteSearchBtn","addPaperBtn","paperFindBtn"
   ]){
-    $(id).disabled=!ready;
+    const el=$(id);
+    if(el)el.disabled=!ready;
   }
+}
+
+function setFolderInfo(text,kind=""){
+  const el=$("folderInfo");
+  if(!el)return;
+  el.textContent=text;
+  el.className=`folder-info ${kind}`.trim();
 }
 
 function setSaveState(text,kind=""){
@@ -64,11 +70,6 @@ async function openDataFile(){
   const {data,created,migrated}=await dataStore.open();
   paperData=data;
 
-  let suffix="";
-  if(created)suffix=" · 새로 생성";
-  else if(migrated)suffix=" · 새 형식으로 자동 변환";
-
-  $("dataFileStatus").textContent=`데이터 파일: ${ParanPaperData.DATA_FILE_NAME}${suffix}`;
   setSaveState("스프레드시트 준비 중...","saving");
   await mountPaperSheet();
   setPaperCount(paperData.papers.length);
@@ -97,25 +98,6 @@ async function saveNow(){
   }
 }
 
-async function addColumn(){
-  if(!dataStore)return;
-  const raw=window.prompt("추가할 열 이름을 입력하세요.");
-  if(raw===null)return;
-  try{
-    await ParanPaperSheet.addColumn(raw);
-  }catch(error){
-    alert(error.message);
-  }
-}
-
-async function moveColumn(direction){
-  try{
-    await ParanPaperSheet.moveSelectedColumn(direction);
-  }catch(error){
-    alert(error.message);
-  }
-}
-
 async function findInSheet(){
   const query=$("paperSearchBox").value;
   if(!query.trim())return;
@@ -133,16 +115,16 @@ async function connectFolder(handle,mayPrompt=true){
   rootHandle=handle;
 
   if(!await ensurePermission(rootHandle,"readwrite",mayPrompt)){
-    status.textContent="폴더 읽기/쓰기 권한이 필요합니다.";
+    setFolderInfo(`현재 폴더: ${rootHandle.name} · 권한 필요`,"warning");
     setFolderReady(false);
     return;
   }
 
   await saveRootHandle(rootHandle);
-  status.textContent=`"${rootHandle.name}" 연결 중...`;
+  setFolderInfo(`현재 폴더: ${rootHandle.name} · 연결 중...`,"loading");
   await openDataFile();
   setFolderReady(true);
-  status.textContent=`"${rootHandle.name}" 폴더 연결 완료`;
+  setFolderInfo(`현재 폴더: ${rootHandle.name}`,"connected");
 
   scanPdfs().catch(error=>{
     console.error(error);
@@ -237,9 +219,6 @@ async function searchPdfNotes(){
   }
 }
 
-$("addColumnBtn").onclick=addColumn;
-$("moveColumnLeftBtn").onclick=()=>moveColumn(-1);
-$("moveColumnRightBtn").onclick=()=>moveColumn(1);
 $("paperFindBtn").onclick=findInSheet;
 $("paperSearchBox").addEventListener("keydown",event=>{
   if(event.key==="Enter")findInSheet();
@@ -262,23 +241,6 @@ $("chooseBtn").onclick=async()=>{
     await connectFolder(handle,true);
   }catch(error){
     if(error.name!=="AbortError")alert(error.message);
-  }
-};
-
-$("reopenBtn").onclick=async()=>{
-  const handle=await loadRootHandle();
-  if(!handle)return alert("저장된 폴더가 없습니다.");
-  await connectFolder(handle,true);
-};
-
-$("scanBtn").onclick=async()=>{
-  try{
-    await saveNow();
-    await reloadDataFile();
-    await scanPdfs();
-    status.textContent=`"${rootHandle.name}" 폴더를 다시 읽었습니다.`;
-  }catch(error){
-    alert(error.message);
   }
 };
 
@@ -306,7 +268,7 @@ window.addEventListener("beforeunload",()=>{
     if(await ensurePermission(saved,"readwrite",false)){
       await connectFolder(saved,false);
     }else{
-      status.textContent=`이전에 선택한 폴더 "${saved.name}"가 저장되어 있습니다. '이전 폴더 다시 열기'를 눌러 주세요.`;
+      setFolderInfo(`현재 폴더: ${saved.name} · 다시 선택 필요`,"warning");
       setFolderReady(false);
     }
   }
