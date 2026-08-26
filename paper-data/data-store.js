@@ -278,12 +278,29 @@
       .replace(/<\/?(?:div|p|section|article|li|ul|ol|h[1-6])[^>]*>/gi," ")
       .replace(/<i(?:\s[^>]*)?>/gi,"<em>")
       .replace(/<\/i>/gi,"</em>")
-      .replace(/<em(?:\s[^>]*)?>/gi,"<em>");
+      .replace(/<em(?:\s[^>]*)?>/gi,"<em>")
+      .replace(/\u00a0/g,"&nbsp;");
 
     // 템플릿에는 텍스트와 이탤릭 표시만 저장한다.
     html=html.replace(/<(?!\/?em\b)[^>]*>/gi,"");
-    html=html.replace(/&nbsp;/gi," ");
+
+    // 일반 공백은 하나로 정리하되 &nbsp;는 건드리지 않는다.
     html=html.replace(/[ \t\f\v]+/g," ").trim();
+
+    // contenteditable은 inline 태그 경계의 공백을 재직렬화하는 과정에서
+    // 일반 공백을 잃을 수 있다. 이탤릭 바로 앞/뒤의 명시적 공백은
+    // non-breaking space로 보존해 템플릿 -> 출력 과정에서 사라지지 않게 한다.
+    //
+    // 예:
+    //   AU(PY), TI, <em>JO</em> VL+IS
+    // -> AU(PY), TI,&nbsp;<em>JO</em>&nbsp;VL+IS
+    //
+    // 이 값은 화면에서는 일반 한 칸처럼 보이고 Word/HWP 복사에서도 유지된다.
+    html=html
+      .replace(/ <em>/gi,"&nbsp;<em>")
+      .replace(/<\/em> /gi,"</em>&nbsp;")
+      .replace(/<em> /gi,"<em>&nbsp;")
+      .replace(/ <\/em>/gi,"&nbsp;</em>");
 
     return html;
   }
@@ -291,6 +308,8 @@
   function templateText(html){
     return String(html??"")
       .replace(/<[^>]+>/g,"")
+      .replace(/&nbsp;/gi," ")
+      .replace(/&#160;/gi," ")
       .replace(/&quot;/g,'"')
       .replace(/&apos;/g,"'")
       .replace(/&lt;/g,"<")

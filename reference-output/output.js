@@ -1,4 +1,4 @@
-/* 파란 논문 v0.13.8 - 아래한글 왼쪽 여백 변환 공식 보정 */
+/* 파란 논문 v0.13.9 - 이탤릭 경계 공백 보존 */
 (function(global){
   "use strict";
 
@@ -143,7 +143,9 @@
         .replace(/[ \t]{2,}/g," ");
     }
 
-    return box.innerHTML.trim();
+    // 템플릿의 내부 공백(&nbsp; 포함)은 이미 sanitizer에서
+    // 의도적으로 보존되므로 여기서는 다시 trim/정규화하지 않는다.
+    return box.innerHTML;
   }
 
   function plainTextFromHtml(html){
