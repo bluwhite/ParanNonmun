@@ -26,7 +26,8 @@ async function walk(dir,prefix=""){
 function setFolderReady(ready){
   for(const id of [
     "noteSearchBtn","addPaperBtn","paperFindBtn","aiSettingsBtn",
-    "pdfLinkBtn","pdfOpenBtn","excelImportBtn","referenceFormatBtn"
+    "pdfLinkBtn","pdfOpenBtn","excelImportBtn","referenceFormatBtn",
+    "referenceOutputBtn"
   ]){
     const el=$(id);
     if(el)el.disabled=!ready;
@@ -159,6 +160,34 @@ async function openReferenceFormatManager(){
 
     const message=
       `참고문헌 양식 관리 오류: ${error.message}`;
+
+    setSaveState(message,"error");
+    alert(message);
+  }
+}
+
+
+async function openReferenceOutput(){
+  if(!rootHandle || !dataStore){
+    alert("먼저 논문 폴더를 선택하세요.");
+    return;
+  }
+
+  try{
+    // 출력 순서가 실제 시트 행 순서와 정확히 같도록
+    // 열기 직전에 현재 Univer 시트를 JSON 데이터로 동기화한다.
+    const synced=await ParanPaperSheet.flush();
+    if(synced)paperData=synced;
+
+    ParanReferenceOutput.open({
+      groups:paperData.referenceFormatGroups,
+      papers:paperData.papers
+    });
+  }catch(error){
+    console.error(error);
+
+    const message=
+      `참고문헌 출력 오류: ${error.message}`;
 
     setSaveState(message,"error");
     alert(message);
@@ -751,6 +780,7 @@ $("addPaperBtn").onclick=async()=>{
 
 $("excelImportBtn").onclick=importExcelReferences;
 $("referenceFormatBtn").onclick=openReferenceFormatManager;
+$("referenceOutputBtn").onclick=openReferenceOutput;
 
 $("aiSettingsBtn").onclick=openAiSettings;
 

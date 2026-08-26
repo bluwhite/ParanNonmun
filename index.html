@@ -19,6 +19,7 @@
       <button id="chooseBtn" class="primary folder-select-btn">논문 폴더 선택</button>
       <button id="excelImportBtn" class="tiny-button" disabled>엑셀 가져오기</button>
       <button id="referenceFormatBtn" class="tiny-button" disabled>참고문헌 형식</button>
+      <button id="referenceOutputBtn" class="tiny-button" disabled>참고문헌 출력</button>
       <button id="downloadFolderBtn" class="tiny-button">다운로드 위치</button>
       <button id="aiSettingsBtn" class="tiny-button" disabled>AI 설정</button>
     </div>
@@ -65,6 +66,55 @@
     </div>
   </section>
 </main>
+
+<dialog id="referenceOutputDialog" class="reference-output-dialog">
+  <div class="reference-output-shell">
+    <div class="reference-output-head">
+      <div>
+        <h2>참고문헌 출력</h2>
+        <p>
+          양식 그룹을 선택하면 <code>확인(*)</code> 값이 있는 자료를 현재 시트 순서대로 생성합니다.
+          결과는 직접 수정할 수 있습니다.
+        </p>
+      </div>
+      <button id="referenceOutputCloseIconBtn" type="button" class="icon-button" aria-label="닫기">×</button>
+    </div>
+
+    <div class="reference-output-toolbar">
+      <label class="reference-output-group-field">
+        <span>양식</span>
+        <select id="referenceOutputGroup"></select>
+      </label>
+
+      <button id="referenceGenerateBtn" type="button">다시 생성</button>
+
+      <span class="reference-toolbar-separator"></span>
+
+      <button id="referenceSheetOrderBtn" type="button" title="현재 논문 시트의 행 순서로 되돌립니다.">시트 순서</button>
+      <button id="referenceSortBtn" type="button" title="한글 저자를 먼저 가나다순으로, 영문과 기타를 그 뒤에 정렬합니다.">한글 먼저 정렬</button>
+
+      <span class="reference-toolbar-spacer"></span>
+      <strong id="referenceOutputCount" class="reference-output-count">0편</strong>
+    </div>
+
+    <div class="reference-output-guide">
+      <strong>확인(*) 규칙</strong>
+      <span><code>*</code> = 기존 VBA 방식으로 국내 학회지/학위논문 자동 판정</span>
+      <span><code>학회지_국내</code> · <code>학위_국내</code> · <code>단행본_국내</code> · <code>학회지_해외</code> · <code>학위_해외</code> · <code>단행본_해외</code> = 해당 형식 직접 적용</span>
+    </div>
+
+    <div id="referenceOutputArea" class="reference-output-area" aria-label="참고문헌 출력 결과"></div>
+
+    <div class="reference-output-footer">
+      <div id="referenceOutputState" class="reference-output-state">준비됨</div>
+      <div class="reference-output-footer-actions">
+        <button id="referencePlainCopyBtn" type="button">일반 텍스트 복사</button>
+        <button id="referenceCopyBtn" type="button" class="primary">서식 포함 복사</button>
+        <button id="referenceOutputCloseBtn" type="button">닫기</button>
+      </div>
+    </div>
+  </div>
+</dialog>
 
 <dialog id="formatManagerDialog" class="format-manager-dialog">
   <div class="format-manager-shell">
@@ -199,6 +249,7 @@
 <script src="./paper-data/data-store.js"></script>
 <script src="./paper-sheet/univer-sheet.js"></script>
 <script src="./reference-format/format-manager.js"></script>
+<script src="./reference-output/output.js"></script>
 <script src="./excel-import/excel-import.js"></script>
 <script src="./pdf-link/pdf-link.js"></script>
 <script src="./pdf-search/note-search.js"></script>
