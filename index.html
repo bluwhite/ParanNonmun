@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>파란 논문</title>
+<link rel="stylesheet" href="https://unpkg.com/@univerjs/preset-sheets-core@0.15.4/lib/index.css">
 <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
@@ -39,22 +40,20 @@
         <div id="paperCount">논문 0편</div>
       </div>
       <div class="paper-actions">
-        <input id="paperSearchBox" type="search" placeholder="목록 검색">
+        <input id="paperSearchBox" type="search" placeholder="시트에서 찾기">
+        <button id="paperFindBtn" disabled>찾기</button>
         <button id="addColumnBtn" disabled>열 추가</button>
+        <button id="moveColumnLeftBtn" disabled>열 ←</button>
+        <button id="moveColumnRightBtn" disabled>열 →</button>
         <button id="addPaperBtn" class="primary" disabled>논문 추가</button>
       </div>
     </div>
     <div class="save-line">
-      <span class="column-hint">열 제목을 드래그하면 순서를 바꿀 수 있습니다.</span>
+      <span class="column-hint">스프레드시트처럼 셀 편집·복사/붙여넣기·행/열 조작·크기 조절이 가능합니다. 기본 열 이름은 유지됩니다.</span>
       <span id="saveState" class="save-state">폴더를 선택하세요.</span>
     </div>
-    <div class="paper-table-wrap">
-      <table class="paper-table">
-        <thead id="paperHead"></thead>
-        <tbody id="paperBody">
-          <tr><td colspan="12" class="empty">논문 폴더를 선택하세요.</td></tr>
-        </tbody>
-      </table>
+    <div id="paperSheet" class="paper-sheet-host">
+      <div class="sheet-placeholder">논문 폴더를 선택하면 스프레드시트가 열립니다.</div>
     </div>
   </section>
 
@@ -76,9 +75,17 @@
   </section>
 </main>
 
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/rxjs@7.8.2/dist/bundles/rxjs.umd.min.js"></script>
+<script src="https://unpkg.com/echarts@5.6.0/dist/echarts.min.js"></script>
+<script src="https://unpkg.com/@univerjs/presets@0.15.4/lib/umd/index.js"></script>
+<script src="https://unpkg.com/@univerjs/preset-sheets-core@0.15.4/lib/umd/index.js"></script>
+<script src="https://unpkg.com/@univerjs/preset-sheets-core@0.15.4/lib/umd/locales/en-US.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="./shared.js"></script>
 <script src="./paper-data/data-store.js"></script>
+<script src="./paper-sheet/univer-sheet.js"></script>
 <script src="./pdf-search/note-search.js"></script>
 <script src="./main.js"></script>
 </body>

@@ -3,7 +3,8 @@
   "use strict";
 
   const DATA_FILE_NAME = "파란논문.json";
-  const SCHEMA_VERSION = 2;
+  const SCHEMA_VERSION = 3;
+  const MANAGED_SHEET_ID = "paran-paper-list";
 
   const SYSTEM_COLUMNS = [
     {id:"check",     name:"확인(*)",   system:true, field:"check"},
@@ -58,7 +59,6 @@
 
       const systemDef=SYSTEM_COLUMNS.find(c=>c.id===id);
       if(systemDef){
-        // 시스템 열 이름은 고정하고 순서만 사용자가 바꿀 수 있다.
         const normalizedName=normalizeColumnName(systemDef.name);
         if(usedNames.has(normalizedName))continue;
         result.push({...systemDef});
@@ -68,17 +68,12 @@
         const normalizedName=normalizeColumnName(name);
         if(!normalizedName || usedNames.has(normalizedName))continue;
 
-        result.push({
-          id,
-          name,
-          system:false
-        });
+        result.push({id,name,system:false});
         usedIds.add(id);
         usedNames.add(normalizedName);
       }
     }
 
-    // 예전 데이터나 손상된 파일에서도 필수 시스템 열은 항상 복구한다.
     for(const systemColumn of SYSTEM_COLUMNS){
       if(!usedIds.has(systemColumn.id)){
         result.push({...systemColumn});
@@ -106,10 +101,7 @@
       }
     }
 
-    // 현재 존재하는 사용자 열만 유지한다.
-    const customIds=new Set(
-      columns.filter(c=>!c.system).map(c=>c.id)
-    );
+    const customIds=new Set(columns.filter(c=>!c.system).map(c=>c.id));
     for(const key of Object.keys(result.custom)){
       if(!customIds.has(key))delete result.custom[key];
     }
@@ -118,13 +110,13 @@
   }
 
   function emptyData(){
-    const columns=cloneSystemColumns();
     return {
       app:"파란 논문",
       schemaVersion:SCHEMA_VERSION,
       updatedAt:new Date().toISOString(),
-      columns,
-      papers:[]
+      columns:cloneSystemColumns(),
+      papers:[],
+      sheetSnapshot:null
     };
   }
 
@@ -137,6 +129,9 @@
       normalized.papers=Array.isArray(data.papers)
         ? data.papers.map(p=>normalizePaper(p,normalized.columns))
         : [];
+      normalized.sheetSnapshot=(data.sheetSnapshot && typeof data.sheetSnapshot==="object")
+        ? data.sheetSnapshot
+        : null;
     }
 
     return normalized;
@@ -145,12 +140,7 @@
   function createCustomColumn(name){
     const cleanName=String(name ?? "").normalize("NFKC").trim();
     if(!cleanName)throw new Error("열 이름을 입력하세요.");
-
-    return {
-      id:newId("custom"),
-      name:cleanName,
-      system:false
-    };
+    return {id:newId("custom"),name:cleanName,system:false};
   }
 
   function hasDuplicateColumnName(columns,name,excludeId=null){
@@ -163,6 +153,61 @@
     );
   }
 
+  function cellText(cell){
+    if(!cell)return "";
+    if(cell.v!==undefined && cell.v!==null)return String(cell.v);
+    if(cell.p?.body?.dataStream)return String(cell.p.body.dataStream).replace(/\r?\n$/g,"");
+    return "";
+  }
+
+  function findManagedSheet(snapshot){
+    if(!snapshot?.sheets)return null;
+    if(snapshot.sheets[MANAGED_SHEET_ID])return snapshot.sheets[MANAGED_SHEET_ID];
+    const firstId=Array.isArray(snapshot.sheetOrder) ? snapshot.sheetOrder[0] : null;
+    if(firstId && snapshot.sheets[firstId])return snapshot.sheets[firstId];
+    const firstKey=Object.keys(snapshot.sheets)[0];
+    return firstKey ? snapshot.sheets[firstKey] : null;
+  }
+
+  function valueForColumn(record,column){
+    if(column.system)return record[column.field] ?? "";
+    return record.custom?.[column.id] ?? "";
+  }
+
+  function appendPaperToSnapshot(snapshot,record,columns){
+    const sheet=findManagedSheet(snapshot);
+    if(!sheet)return;
+
+    sheet.cellData=sheet.cellData || {};
+    const headerRow=sheet.cellData[0] || sheet.cellData["0"] || {};
+    const columnByName=new Map(columns.map(c=>[normalizeColumnName(c.name),c]));
+
+    let maxUsedRow=0;
+    for(const rowKey of Object.keys(sheet.cellData)){
+      const row=Number(rowKey);
+      if(Number.isFinite(row) && row>maxUsedRow){
+        const cells=sheet.cellData[rowKey] || {};
+        const hasValue=Object.values(cells).some(cell=>cellText(cell).trim()!=="");
+        if(hasValue)maxUsedRow=row;
+      }
+    }
+
+    const targetRow=Math.max(1,maxUsedRow+1);
+    const rowData={};
+
+    for(const [colKey,cell] of Object.entries(headerRow)){
+      const name=cellText(cell).normalize("NFKC").trim();
+      if(!name)continue;
+      const column=columnByName.get(normalizeColumnName(name));
+      if(!column)continue;
+      const value=String(valueForColumn(record,column) ?? "");
+      if(value!=="")rowData[colKey]={v:value};
+    }
+
+    sheet.cellData[targetRow]=rowData;
+    sheet.rowCount=Math.max(Number(sheet.rowCount)||0,targetRow+50);
+  }
+
   class PaperDataStore{
     constructor(rootHandle){
       this.rootHandle=rootHandle;
@@ -172,10 +217,7 @@
     }
 
     async open(){
-      this.fileHandle=await this.rootHandle.getFileHandle(
-        DATA_FILE_NAME,
-        {create:true}
-      );
+      this.fileHandle=await this.rootHandle.getFileHandle(DATA_FILE_NAME,{create:true});
 
       const file=await this.fileHandle.getFile();
       const text=(await file.text()).replace(/^\uFEFF/,"").trim();
@@ -190,26 +232,15 @@
       try{
         parsed=JSON.parse(text);
       }catch(error){
-        throw new Error(
-          `${DATA_FILE_NAME} 파일을 읽을 수 없습니다. JSON 형식을 확인하세요.`
-        );
+        throw new Error(`${DATA_FILE_NAME} 파일을 읽을 수 없습니다. JSON 형식을 확인하세요.`);
       }
 
-      const needsMigration=
-        Number(parsed?.schemaVersion||0)<SCHEMA_VERSION ||
-        !Array.isArray(parsed?.columns);
-
+      const needsMigration=Number(parsed?.schemaVersion||0)<SCHEMA_VERSION;
       this.data=normalizeData(parsed);
 
-      if(needsMigration){
-        await this.save(this.data);
-      }
+      if(needsMigration)await this.save(this.data);
 
-      return {
-        data:this.data,
-        created:false,
-        migrated:needsMigration
-      };
+      return {data:this.data,created:false,migrated:needsMigration};
     }
 
     async reload(){
@@ -217,18 +248,13 @@
 
       const file=await this.fileHandle.getFile();
       const text=(await file.text()).replace(/^\uFEFF/,"").trim();
-
-      this.data=text
-        ? normalizeData(JSON.parse(text))
-        : emptyData();
-
+      this.data=text ? normalizeData(JSON.parse(text)) : emptyData();
       return this.data;
     }
 
     async save(data=this.data){
       this.data=normalizeData(data);
       this.data.updatedAt=new Date().toISOString();
-
       const payload=JSON.stringify(this.data,null,2)+"\n";
 
       const task=async()=>{
@@ -248,6 +274,10 @@
       const record=normalizePaper(paper,this.data.columns);
       this.data.papers.push(record);
 
+      if(this.data.sheetSnapshot){
+        appendPaperToSnapshot(this.data.sheetSnapshot,record,this.data.columns);
+      }
+
       await this.save(this.data);
       return record;
     }
@@ -256,6 +286,7 @@
   global.ParanPaperData={
     DATA_FILE_NAME,
     SCHEMA_VERSION,
+    MANAGED_SHEET_ID,
     SYSTEM_COLUMNS,
     PAPER_FIELDS,
     PaperDataStore,
@@ -263,6 +294,8 @@
     normalizeData,
     normalizeColumnName,
     createCustomColumn,
-    hasDuplicateColumnName
+    hasDuplicateColumnName,
+    cellText,
+    findManagedSheet
   };
 })(window);
