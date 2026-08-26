@@ -77,6 +77,27 @@ $("risText").addEventListener("input",()=>{
   parseTimer=setTimeout(parseNow,220);
 });
 
+$("brCleanupBtn").onclick=()=>{
+  const textarea=$("risText");
+  const before=textarea.value;
+
+  // <br>, <br/>, <br /> 등을 실제 줄바꿈으로 변환한다.
+  const after=before.replace(/<br\s*\/?>/gi,"\n");
+
+  if(after===before){
+    $("parseState").textContent="변환할 BR 태그가 없습니다.";
+    return;
+  }
+
+  textarea.value=after;
+
+  // 연속해서 생긴 과도한 빈 줄은 그대로 두고, RIS 파싱만 즉시 다시 수행한다.
+  clearTimeout(parseTimer);
+  parseNow();
+
+  textarea.focus();
+};
+
 $("cancelBtn").onclick=()=>window.close();
 
 $("addBtn").onclick=async()=>{
