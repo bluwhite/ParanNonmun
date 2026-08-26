@@ -1,5 +1,4 @@
 let rootHandle=null;
-let downloadHandle=null;
 let pdfs=[];
 let dataStore=null;
 let paperData={columns:[],papers:[],sheetSnapshot:null};
@@ -228,81 +227,42 @@ async function saveAiSettings(){
 }
 
 
-function markDownloadFolder(handle,permission=""){
+
+function markDownloadLocation(configured=false){
   const button=$("downloadFolderBtn");
   if(!button)return;
 
-  const configured=!!handle;
   button.classList.toggle("configured",configured);
-
-  if(!configured){
-    button.textContent="다운로드 폴더";
-    button.title="PDF를 내려받는 폴더를 지정합니다.";
-    return;
-  }
-
-  button.textContent="다운로드 폴더 ✓";
-  button.title=permission==="granted"
-    ? `다운로드 폴더: ${handle.name}`
-    : `다운로드 폴더: ${handle.name} · 사용 시 권한을 다시 요청할 수 있습니다.`;
+  button.textContent=configured
+    ? "다운로드 위치 ✓"
+    : "다운로드 위치";
+  button.title=configured
+    ? "PDF 선택창이 최근 선택한 다운로드 위치를 기억합니다."
+    : "PDF 선택창이 시작할 다운로드 위치를 지정합니다.";
 }
 
-async function refreshDownloadFolder(){
-  downloadHandle=await loadDownloadHandle();
-
-  if(!downloadHandle){
-    markDownloadFolder(null);
-    return null;
-  }
-
-  let permission="";
+async function chooseDownloadLocation(){
   try{
-    permission=await downloadHandle.queryPermission({mode:"readwrite"});
-  }catch(_error){}
+    const selected=
+      await ParanPdfLink.rememberDownloadLocation();
 
-  markDownloadFolder(downloadHandle,permission);
-  return downloadHandle;
-}
+    if(!selected)return;
 
-async function chooseDownloadFolder(){
-  if(typeof window.showDirectoryPicker!=="function"){
-    alert(
-      "현재 브라우저에서는 폴더 선택 기능을 사용할 수 없습니다. Chrome 또는 Edge 최신 버전을 사용하세요."
-    );
-    return null;
-  }
-
-  try{
-    const handle=await showDirectoryPicker({
-      id:"paran-paper-download-folder",
-      mode:"readwrite",
-      startIn:"downloads"
-    });
-
-    if(!await ensurePermission(handle,"readwrite",true)){
-      throw new Error("다운로드 폴더 쓰기 권한이 필요합니다.");
-    }
-
-    downloadHandle=handle;
-    await saveDownloadHandle(handle);
-    markDownloadFolder(handle,"granted");
+    markDownloadLocation(true);
 
     setSaveState(
-      `다운로드 폴더: ${handle.name}`,
+      "다운로드 위치를 기억했습니다. 선택한 PDF는 변경하지 않았습니다.",
       "saved"
     );
-
-    return handle;
   }catch(error){
-    if(error?.name==="AbortError")return null;
+    if(error?.name==="AbortError")return;
 
     console.error(error);
     setSaveState(
-      `다운로드 폴더 오류: ${error.message}`,
+      `다운로드 위치 오류: ${error.message}`,
       "error"
     );
-    alert(`다운로드 폴더 오류: ${error.message}`);
-    return null;
+    alert(`다운로드 위치 오류: ${error.message}`);
   }
 }
 
@@ -331,11 +291,10 @@ async function linkPdfToSelectedRow(){
   let context;
 
   try{
-    // 파일 선택창을 열기 전에 현재 선택 행과 논문명을 동기적으로 확인한다.
-    // 그래야 브라우저의 사용자 활성화가 파일 선택창까지 유지된다.
     context=selectedPaperContext();
 
     const title=String(context.title||"").trim();
+
     if(!title){
       failPdfAction(
         "PDF 연결 실패: 선택한 행에 논문명이 없습니다."
@@ -343,30 +302,7 @@ async function linkPdfToSelectedRow(){
       return;
     }
 
-    if(!downloadHandle){
-      failPdfAction(
-        "PDF 연결 실패: 먼저 상단의 '다운로드 폴더' 버튼으로 폴더를 지정하세요."
-      );
-      return;
-    }
-
-    if(
-      !await ensurePermission(
-        downloadHandle,
-        "readwrite",
-        true
-      )
-    ){
-      failPdfAction(
-        "PDF 연결 실패: 다운로드 폴더 접근 권한이 필요합니다."
-      );
-      return;
-    }
-
-    const selected=
-      await ParanPdfLink.pickPdfFromDownloadFolder(
-        downloadHandle
-      );
+    const selected=await ParanPdfLink.pickPdf();
 
     if(!selected)return;
 
@@ -379,7 +315,6 @@ async function linkPdfToSelectedRow(){
         title
       );
 
-    // PDF 열에는 확장자를 제외한 실제 새 파일명만 기록.
     try{
       await ParanPaperSheet.setSystemFieldAtRow(
         context.rowIndex,
@@ -387,8 +322,6 @@ async function linkPdfToSelectedRow(){
         copied.baseName
       );
     }catch(error){
-      // 시트 연결에 실패하면 다운로드 원본은 그대로 두고
-      // 새로 만든 대상 파일만 정리한다.
       try{
         await rootHandle.removeEntry(copied.fileName);
       }catch(_e){}
@@ -397,8 +330,7 @@ async function linkPdfToSelectedRow(){
 
     const sourceDeleted=
       await ParanPdfLink.removeSourceFile(
-        downloadHandle,
-        selected.fileName
+        selected.fileHandle
       );
 
     await scanPdfs();
@@ -410,7 +342,7 @@ async function linkPdfToSelectedRow(){
       );
     }else{
       setSaveState(
-        `PDF 연결 완료: ${copied.fileName} · 다운로드 폴더의 원본은 삭제하지 못했습니다.`,
+        `PDF 연결 완료: ${copied.fileName} · 원본 PDF는 자동 삭제하지 못했습니다.`,
         "warning"
       );
     }
@@ -454,7 +386,6 @@ async function openPdfFromRowContext(context,showErrors=true){
       return;
     }
 
-    // 새 창을 먼저 열어 popup 차단을 피한 뒤 PDF 목록을 다시 확인한다.
     const pending=window.open("about:blank","_blank");
 
     await scanPdfs();
@@ -625,7 +556,7 @@ async function searchPdfNotes(){
 }
 
 
-$("downloadFolderBtn").onclick=chooseDownloadFolder;
+$("downloadFolderBtn").onclick=chooseDownloadLocation;
 $("pdfLinkBtn").onclick=linkPdfToSelectedRow;
 $("pdfOpenBtn").onclick=openPdfForSelectedRow;
 
@@ -709,7 +640,7 @@ window.addEventListener("beforeunload",()=>{
 });
 
 (async()=>{
-  await refreshDownloadFolder();
+  markDownloadLocation(false);
 
   const saved=await loadRootHandle();
   if(saved){
