@@ -2,6 +2,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/p
 
 (async()=>{
   const params=new URLSearchParams(location.search);
+  const requestedPage=Math.max(1,Number(params.get('page'))||1);
   let rootHandle,fileHandle,parentHandle,fileName,relativePath,originalBytes,pdfDoc;
   let zoom=1.25,tool='highlight',dirty=false,history=[],editMode=false;
   const pending={},rendered=new Map();
@@ -517,7 +518,17 @@ pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/p
   originalBytes=new Uint8Array(await f.arrayBuffer());
   pdfDoc=await pdfjsLib.getDocument({data:originalBytes.slice()}).promise;
   
-  $('pageIndicator').textContent=`페이지 1 / ${pdfDoc.numPages} · v${APP_VERSION}`;
+  const initialPage=Math.min(requestedPage,pdfDoc.numPages);
+  $('pageIndicator').textContent=`페이지 ${initialPage} / ${pdfDoc.numPages} · v${APP_VERSION}`;
   makeSlots();
   setEditMode(false,`읽기 모드 · 준비 완료 · v${APP_VERSION}`);
+
+  if(initialPage>1){
+    requestAnimationFrame(()=>{
+      requestAnimationFrame(()=>{
+        const target=document.querySelector(`.page-wrap[data-page="${initialPage}"]`);
+        if(target)target.scrollIntoView({block:'start'});
+      });
+    });
+  }
 })().catch(e=>{console.error(e);alert(e.message);const s=document.getElementById('viewerStatus');if(s)s.textContent='오류: '+e.message;});
