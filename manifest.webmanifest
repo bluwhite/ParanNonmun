@@ -1,8 +1,0 @@
-{
-  "name": "로컬 PDF 폴더 테스트",
-  "short_name": "PDF 테스트",
-  "start_url": "./",
-  "display": "standalone",
-  "background_color": "#f3f4f6",
-  "theme_color": "#111827"
-}
