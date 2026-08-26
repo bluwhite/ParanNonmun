@@ -45,3 +45,21 @@
   padding:6px 9px;
   font-size:11px
 }
+
+
+/* v0.10.4: 상태 메시지와 누락 필드 확인 표시 */
+.preview-head #parseState.error{
+  color:#dc2626;
+  font-weight:800;
+}
+.field input.missing-reference-field,
+.field textarea.missing-reference-field{
+  background:#fff7bf;
+  border-color:#eab308;
+  box-shadow:0 0 0 1px rgba(234,179,8,.08);
+}
+.field input.missing-reference-field:focus,
+.field textarea.missing-reference-field:focus{
+  outline:2px solid rgba(234,179,8,.28);
+  outline-offset:1px;
+}

@@ -41,6 +41,7 @@ function buildPreview(){
 
   grid.addEventListener("input",()=>{
     $("addBtn").disabled=!$("field-title").value.trim();
+    updateMissingFieldWarnings();
   });
 }
 
@@ -49,6 +50,8 @@ function fillPreview(record){
     const el=$(`field-${field}`);
     if(el)el.value=record[field]||"";
   }
+
+  updateMissingFieldWarnings();
 }
 
 function clearPreview(){
@@ -70,6 +73,31 @@ function collectPreview(){
 function inputText(){
   return $("risText").value.trim();
 }
+
+function setParseState(message,kind="normal"){
+  const state=$("parseState");
+  if(!state)return;
+
+  state.textContent=message;
+  state.classList.toggle("error",kind==="error");
+}
+
+function updateMissingFieldWarnings(){
+  const warningFields=["volume","issue","startPage","endPage"];
+  const journal=$("field-journal")?.value.trim()||"";
+
+  // 아직 파싱 결과가 없는 상태에서는 경고 표시를 하지 않는다.
+  const shouldCheck=!!parsed && !journal.includes("학위논문");
+
+  for(const field of warningFields){
+    const input=$(`field-${field}`);
+    if(!input)continue;
+
+    const missing=shouldCheck && !input.value.trim();
+    input.classList.toggle("missing-reference-field",missing);
+  }
+}
+
 
 async function ensureJournalInfo(){
   if(journalInfoReady)return true;
@@ -171,8 +199,10 @@ async function parseAi(){
 
   if(!text){
     clearPreview();
-    $("parseState").textContent=
-      "AI로 분석할 참고문헌을 입력하세요.";
+    setParseState(
+      "AI로 분석할 참고문헌을 입력하세요.",
+      "error"
+    );
     return;
   }
 
@@ -180,8 +210,9 @@ async function parseAi(){
 
   try{
     button.disabled=true;
-    $("parseState").textContent=
-      "Groq AI가 참고문헌 형식을 판단하고 분석 중...";
+    setParseState(
+      "Groq AI가 참고문헌 형식을 판단하고 분석 중..."
+    );
 
     const rootHandle=await loadRootHandle();
 
@@ -225,13 +256,15 @@ async function parseAi(){
       : "";
 
     if(parsed._journalMatched){
-      $("parseState").textContent=
+      setParseState(
         count>1
           ? `AI 분석 완료 · 형식: ${style}${route} · 학회명 후보 ${count}개 중 첫 번째 적용`
-          : `AI 분석 완료 · 형식: ${style}${route} · 학술지 정보 일치`;
+          : `AI 분석 완료 · 형식: ${style}${route} · 학술지 정보 일치`
+      );
     }else{
-      $("parseState").textContent=
-        `AI 분석 완료 · 형식: ${style}${route}`;
+      setParseState(
+        `AI 분석 완료 · 형식: ${style}${route}`
+      );
     }
 
     if(parsed._aiFallback && parsed._aiPrimaryDiagnostic){
@@ -239,8 +272,10 @@ async function parseAi(){
     }
   }catch(error){
     clearPreview();
-    $("parseState").textContent=
-      `AI 분석 실패: ${error.message}`;
+    setParseState(
+      `AI 분석 실패: ${error.message}`,
+      "error"
+    );
 
     if(error?.diagnostic){
       showAiDiagnostic(error.diagnostic);
@@ -261,19 +296,20 @@ function parseRis(){
 
   if(!text){
     clearPreview();
-    $("parseState").textContent="RIS 내용을 입력하세요.";
+    setParseState("RIS 내용을 입력하세요.","error");
     return;
   }
 
   try{
     parsed=ParanRisParser.parse(text);
     fillPreview(parsed);
-    $("parseState").textContent=
-      `RIS 분석 완료${parsed._risType?` · ${parsed._risType}`:""}`;
+    setParseState(
+      `RIS 분석 완료${parsed._risType?` · ${parsed._risType}`:""}`
+    );
     $("addBtn").disabled=!parsed.title;
   }catch(error){
     clearPreview();
-    $("parseState").textContent=error.message;
+    setParseState(error.message,"error");
   }
 }
 
@@ -282,7 +318,7 @@ async function parseApa(){
 
   if(!text){
     clearPreview();
-    $("parseState").textContent="APA 내용을 입력하세요.";
+    setParseState("APA 내용을 입력하세요.","error");
     return;
   }
 
@@ -290,7 +326,7 @@ async function parseApa(){
 
   try{
     button.disabled=true;
-    $("parseState").textContent="APA 분석 중...";
+    setParseState("APA 분석 중...");
 
     await ensureJournalInfo();
 
@@ -302,22 +338,29 @@ async function parseApa(){
       const count=parsed._publisherCandidates?.length||0;
 
       if(count>1){
-        $("parseState").textContent=
-          `APA 분석 완료 · 학술지 정보 일치 · 학회명 후보 ${count}개 중 첫 번째 적용`;
+        setParseState(
+          `APA 분석 완료 · 학술지 정보 일치 · 학회명 후보 ${count}개 중 첫 번째 적용`
+        );
       }else{
-        $("parseState").textContent=
-          "APA 분석 완료 · 학술지 정보 일치";
+        setParseState(
+          "APA 분석 완료 · 학술지 정보 일치"
+        );
       }
     }else if(parsed.journal){
-      $("parseState").textContent=
-        "APA 분석 완료 · 학술지명은 찾았지만 학회명 정보가 없습니다.";
+      setParseState(
+        "APA 분석 완료 · 학술지명은 찾았지만 학회명 정보가 없습니다."
+      );
     }else{
-      $("parseState").textContent=
-        "APA 분석 완료 · 학술지명을 확인해 주세요.";
+      setParseState(
+        "APA 분석 완료 · 학술지명을 확인해 주세요."
+      );
     }
   }catch(error){
     clearPreview();
-    $("parseState").textContent=`APA 분석 실패: ${error.message}`;
+    setParseState(
+      `APA 분석 실패: ${error.message}`,
+      "error"
+    );
   }finally{
     button.disabled=false;
   }
@@ -329,7 +372,7 @@ async function parseMla(){
 
   if(!text){
     clearPreview();
-    $("parseState").textContent="MLA 내용을 입력하세요.";
+    setParseState("MLA 내용을 입력하세요.","error");
     return;
   }
 
@@ -337,7 +380,7 @@ async function parseMla(){
 
   try{
     button.disabled=true;
-    $("parseState").textContent="MLA 분석 중...";
+    setParseState("MLA 분석 중...");
 
     await ensureJournalInfo();
 
@@ -349,22 +392,29 @@ async function parseMla(){
       const count=parsed._publisherCandidates?.length||0;
 
       if(count>1){
-        $("parseState").textContent=
-          `MLA 분석 완료 · 학술지 정보 일치 · 학회명 후보 ${count}개 중 첫 번째 적용`;
+        setParseState(
+          `MLA 분석 완료 · 학술지 정보 일치 · 학회명 후보 ${count}개 중 첫 번째 적용`
+        );
       }else{
-        $("parseState").textContent=
-          "MLA 분석 완료 · 학술지 정보 일치";
+        setParseState(
+          "MLA 분석 완료 · 학술지 정보 일치"
+        );
       }
     }else if(parsed.journal){
-      $("parseState").textContent=
-        "MLA 분석 완료 · 학술지명은 찾았지만 학회명 정보가 없습니다.";
+      setParseState(
+        "MLA 분석 완료 · 학술지명은 찾았지만 학회명 정보가 없습니다."
+      );
     }else{
-      $("parseState").textContent=
-        "MLA 분석 완료 · 학술지명을 확인해 주세요.";
+      setParseState(
+        "MLA 분석 완료 · 학술지명을 확인해 주세요."
+      );
     }
   }catch(error){
     clearPreview();
-    $("parseState").textContent=`MLA 분석 실패: ${error.message}`;
+    setParseState(
+      `MLA 분석 실패: ${error.message}`,
+      "error"
+    );
   }finally{
     button.disabled=false;
   }
@@ -374,8 +424,9 @@ $("risText").addEventListener("input",()=>{
   // 입력 내용이 바뀌면 이전 분석 결과를 그대로 저장하지 못하게 한다.
   clearPreview();
   clearAiDiagnostic();
-  $("parseState").textContent=
-    "입력됨 · AI, RIS, APA 또는 MLA 버튼을 누르세요.";
+  setParseState(
+    "입력됨 · AI, RIS, MLA 또는 APA 버튼을 누르세요."
+  );
 });
 
 $("brCleanupBtn").onclick=()=>{
@@ -384,23 +435,25 @@ $("brCleanupBtn").onclick=()=>{
   const after=before.replace(/<br\s*\/?>/gi,"\n");
 
   if(after===before){
-    $("parseState").textContent=
-      "변환할 BR 태그가 없습니다.";
+    setParseState(
+      "변환할 BR 태그가 없습니다."
+    );
     return;
   }
 
   textarea.value=after;
   clearPreview();
   clearAiDiagnostic();
-  $("parseState").textContent=
-    "BR 태그를 줄바꿈으로 변환했습니다. AI, RIS, APA 또는 MLA 버튼을 누르세요.";
+  setParseState(
+    "BR 태그를 줄바꿈으로 변환했습니다. AI, RIS, MLA 또는 APA 버튼을 누르세요."
+  );
   textarea.focus();
 };
 
 $("aiParseBtn").onclick=parseAi;
 $("risParseBtn").onclick=parseRis;
-$("apaParseBtn").onclick=parseApa;
 $("mlaParseBtn").onclick=parseMla;
+$("apaParseBtn").onclick=parseApa;
 
 $("copyAiDiagnosticBtn").onclick=async()=>{
   const text=$("aiDiagnosticText")?.textContent||"";
@@ -424,7 +477,7 @@ $("cancelBtn").onclick=()=>window.close();
 $("addBtn").onclick=async()=>{
   try{
     $("addBtn").disabled=true;
-    $("parseState").textContent="저장 중...";
+    setParseState("저장 중...");
 
     const rootHandle=await loadRootHandle();
     if(!rootHandle){
@@ -459,7 +512,10 @@ $("addBtn").onclick=async()=>{
   }catch(error){
     console.error(error);
     alert(`논문 추가 실패: ${error.message}`);
-    $("parseState").textContent=`오류: ${error.message}`;
+    setParseState(
+      `오류: ${error.message}`,
+      "error"
+    );
     $("addBtn").disabled=!$("field-title").value.trim();
   }
 };
