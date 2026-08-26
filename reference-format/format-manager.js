@@ -1,33 +1,26 @@
-/* 파란 논문 v0.13.0 - 참고문헌 양식 + 글자/문단 모양 관리 */
+/* 파란 논문 v0.13.1 - 참고문헌 양식 관리 */
 (function(global){
   "use strict";
 
   const $=id=>document.getElementById(id);
 
-  const GROUP_STYLE_IDS={
-    fontFamily:"formatGroupFontFamily",
-    fontSizePt:"formatGroupFontSize",
-    lineHeightPercent:"formatGroupLineHeight",
-    leftIndentPt:"formatGroupLeftIndent",
-    hangingIndentPt:"formatGroupHangingIndent",
-    spaceBeforePt:"formatGroupSpaceBefore",
-    spaceAfterPt:"formatGroupSpaceAfter",
-    alignment:"formatGroupAlignment"
+  const STYLE_CONTROL_IDS={
+    fontFamily:"formatStyleFontFamily",
+    fontSizePt:"formatStyleFontSize",
+    fontScalePercent:"formatStyleFontScale",
+    letterSpacingPercent:"formatStyleLetterSpacing",
+    lineHeightPercent:"formatStyleLineHeight",
+    leftIndentPt:"formatStyleLeftIndent",
+    rightIndentPt:"formatStyleRightIndent",
+    hangingIndentPt:"formatStyleHangingIndent",
+    spaceBeforePt:"formatStyleSpaceBefore",
+    spaceAfterPt:"formatStyleSpaceAfter",
+    alignment:"formatStyleAlignment"
   };
-
-  const STYLE_FIELDS=[
-    {key:"fontFamily",label:"글꼴",type:"text",list:"referenceFontList"},
-    {key:"fontSizePt",label:"크기",unit:"pt",type:"number",min:5,max:72,step:0.5},
-    {key:"lineHeightPercent",label:"줄간격",unit:"%",type:"number",min:80,max:400,step:5},
-    {key:"leftIndentPt",label:"왼쪽 여백",unit:"pt",type:"number",min:0,max:300,step:1},
-    {key:"hangingIndentPt",label:"내어쓰기",unit:"pt",type:"number",min:0,max:300,step:1},
-    {key:"spaceBeforePt",label:"문단 위",unit:"pt",type:"number",min:0,max:200,step:1},
-    {key:"spaceAfterPt",label:"문단 아래",unit:"pt",type:"number",min:0,max:200,step:1},
-    {key:"alignment",label:"정렬",type:"select"}
-  ];
 
   let working=[];
   let selectedId=null;
+  let selectedStyleTarget="group";
   let saveCallback=async()=>{};
   let initialized=false;
   let dirty=false;
@@ -77,7 +70,7 @@
     if(tag==="br")return " ";
 
     const style=String(element.getAttribute("style")||"").toLowerCase();
-    const isItalic=
+    const italic=
       inheritedItalic ||
       tag==="i" ||
       tag==="em" ||
@@ -85,21 +78,22 @@
 
     let inner="";
     for(const child of element.childNodes){
-      inner+=nodeToSafeHtml(child,isItalic);
+      inner+=nodeToSafeHtml(child,italic);
     }
 
     if(!inner)return "";
-    if(isItalic && !inheritedItalic)return `<em>${inner}</em>`;
+    if(italic && !inheritedItalic)return `<em>${inner}</em>`;
 
-    const blockTags=new Set([
+    return new Set([
       "div","p","section","article","li","ul","ol",
       "h1","h2","h3","h4","h5","h6"
-    ]);
-
-    return blockTags.has(tag) ? ` ${inner} ` : inner;
+    ]).has(tag)
+      ? ` ${inner} `
+      : inner;
   }
 
   function sanitizeEditorHtml(editor){
+    if(!editor)return "";
     let html="";
     for(const node of editor.childNodes){
       html+=nodeToSafeHtml(node,false);
@@ -117,26 +111,16 @@
     return global.ParanPaperData.sanitizeTemplateHtml(result);
   }
 
-  function selectedGroupNameSet(excludeId=null){
+  function uniqueGroupName(base){
     const normalize=
       global.ParanPaperData.normalizeReferenceFormatGroupName;
-    return new Set(
-      working
-        .filter(group=>group.id!==excludeId)
-        .map(group=>normalize(group.name))
-    );
-  }
-
-  function uniqueGroupName(base,excludeId=null){
-    const normalize=
-      global.ParanPaperData.normalizeReferenceFormatGroupName;
-    const names=selectedGroupNameSet(excludeId);
+    const names=new Set(working.map(group=>normalize(group.name)));
     const clean=String(base||"새 양식").normalize("NFKC").trim() || "새 양식";
 
     if(!names.has(normalize(clean)))return clean;
 
-    for(let index=2;index<1000;index++){
-      const candidate=`${clean} ${index}`;
+    for(let i=2;i<1000;i++){
+      const candidate=`${clean} ${i}`;
       if(!names.has(normalize(candidate)))return candidate;
     }
     return `${clean} ${Date.now()}`;
@@ -149,195 +133,139 @@
     return `ref-group-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   }
 
-  function createStyleControl(field){
-    const label=document.createElement("label");
-    label.className="reference-style-mini-field";
-
-    const title=document.createElement("span");
-    title.textContent=field.unit
-      ? `${field.label}(${field.unit})`
-      : field.label;
-
-    let control;
-
-    if(field.type==="select"){
-      control=document.createElement("select");
-      for(const [value,text] of [
-        ["left","왼쪽"],
-        ["justify","양쪽"],
-        ["center","가운데"],
-        ["right","오른쪽"]
-      ]){
-        const option=document.createElement("option");
-        option.value=value;
-        option.textContent=text;
-        control.append(option);
-      }
-    }else{
-      control=document.createElement("input");
-      control.type=field.type;
-      if(field.list)control.setAttribute("list",field.list);
-      if(field.min!==undefined)control.min=String(field.min);
-      if(field.max!==undefined)control.max=String(field.max);
-      if(field.step!==undefined)control.step=String(field.step);
-      control.autocomplete="off";
-    }
-
-    control.className="reference-style-control";
-    control.dataset.styleField=field.key;
-
-    label.append(title,control);
-    return label;
-  }
-
-  function ensureFormatStyleControls(){
-    for(const item of global.ParanPaperData.REFERENCE_FORMAT_ITEMS){
-      const editor=document.querySelector(
-        `[data-format-key="${item.key}"]`
-      );
-      const row=editor?.closest(".format-template-row");
-      if(!row || row.dataset.styleReady==="1")continue;
-
-      row.dataset.styleReady="1";
-      row.dataset.formatKey=item.key;
-
-      const toggle=document.createElement("label");
-      toggle.className="format-override-toggle";
-
-      const checkbox=document.createElement("input");
-      checkbox.type="checkbox";
-      checkbox.dataset.formatOverride=item.key;
-
-      const text=document.createElement("span");
-      text.textContent="개별 서식";
-
-      toggle.append(checkbox,text);
-
-      const panel=document.createElement("div");
-      panel.className="format-style-override";
-      panel.dataset.formatStyleKey=item.key;
-
-      for(const field of STYLE_FIELDS){
-        panel.append(createStyleControl(field));
-      }
-
-      row.append(toggle,panel);
-
-      checkbox.addEventListener("change",()=>{
-        updateOverridePanelState(item.key);
-        commitEditor();
-        setDirty(true);
-      });
-
-      for(const control of panel.querySelectorAll(".reference-style-control")){
-        control.addEventListener("input",()=>{
-          commitEditor();
-          setDirty(true);
-        });
-        control.addEventListener("change",()=>{
-          commitEditor();
-          setDirty(true);
-        });
-      }
-    }
-  }
-
-  function readStyleControls(container){
+  function readStyleFields(){
     const raw={};
-    for(const field of STYLE_FIELDS){
-      const control=container.querySelector(
-        `[data-style-field="${field.key}"]`
-      );
-      if(!control)continue;
-      raw[field.key]=
-        field.type==="number"
-          ? Number(control.value)
-          : control.value;
-    }
-    return global.ParanPaperData.normalizeReferenceStyle(raw);
-  }
 
-  function writeStyleControls(container,style){
-    const normalized=
-      global.ParanPaperData.normalizeReferenceStyle(style);
-
-    for(const field of STYLE_FIELDS){
-      const control=container.querySelector(
-        `[data-style-field="${field.key}"]`
-      );
-      if(control)control.value=String(normalized[field.key]);
-    }
-  }
-
-  function readGroupStyle(){
-    const raw={};
-    for(const [key,id] of Object.entries(GROUP_STYLE_IDS)){
+    for(const [key,id] of Object.entries(STYLE_CONTROL_IDS)){
       const control=$(id);
       raw[key]=
         control?.type==="number"
           ? Number(control.value)
           : control?.value;
     }
+
     return global.ParanPaperData.normalizeReferenceStyle(raw);
   }
 
-  function writeGroupStyle(style){
+  function writeStyleFields(style){
     const normalized=
       global.ParanPaperData.normalizeReferenceStyle(style);
 
-    for(const [key,id] of Object.entries(GROUP_STYLE_IDS)){
+    for(const [key,id] of Object.entries(STYLE_CONTROL_IDS)){
       const control=$(id);
       if(control)control.value=String(normalized[key]);
     }
   }
 
-  function updateOverridePanelState(key){
-    const checkbox=document.querySelector(
-      `[data-format-override="${key}"]`
-    );
-    const panel=document.querySelector(
-      `[data-format-style-key="${key}"]`
-    );
-    if(!checkbox || !panel)return;
+  function setStyleFieldsDisabled(disabled){
+    for(const id of Object.values(STYLE_CONTROL_IDS)){
+      const control=$(id);
+      if(control)control.disabled=disabled;
+    }
+  }
 
-    const enabled=checkbox.checked;
-    panel.hidden=!enabled;
-    for(const control of panel.querySelectorAll(".reference-style-control")){
-      control.disabled=!enabled;
+  function ensureGroupShape(group){
+    if(!group)return null;
+
+    group.style=
+      global.ParanPaperData.normalizeReferenceStyle(group.style);
+
+    group.formatStyles=
+      global.ParanPaperData.normalizeFormatStyles(
+        group.formatStyles,
+        group.style
+      );
+
+    group.formats=group.formats || {};
+    return group;
+  }
+
+  function formatEntry(group,key){
+    ensureGroupShape(group);
+    return group.formatStyles[key];
+  }
+
+  function commitStylePanel(target=selectedStyleTarget){
+    const group=ensureGroupShape(currentGroup());
+    if(!group)return;
+
+    if(target==="group"){
+      group.style=readStyleFields();
+      return;
+    }
+
+    const entry=formatEntry(group,target);
+    const useGroup=$("formatStyleUseGroup").checked;
+
+    entry.useGroupStyle=useGroup;
+
+    if(!useGroup){
+      entry.style=readStyleFields();
+    }
+  }
+
+  function renderStylePanel(){
+    const group=ensureGroupShape(currentGroup());
+    const enabled=!!group;
+
+    $("formatStyleTargetSelect").disabled=!enabled;
+    $("formatStyleTargetSelect").value=selectedStyleTarget;
+
+    if(!enabled){
+      $("formatStyleUseGroupRow").hidden=true;
+      $("formatStyleInheritedNotice").hidden=true;
+      setStyleFieldsDisabled(true);
+      return;
+    }
+
+    if(selectedStyleTarget==="group"){
+      $("formatStyleUseGroupRow").hidden=true;
+      $("formatStyleInheritedNotice").hidden=true;
+      writeStyleFields(group.style);
+      setStyleFieldsDisabled(false);
+      return;
+    }
+
+    const entry=formatEntry(group,selectedStyleTarget);
+    const useGroup=entry.useGroupStyle!==false;
+
+    $("formatStyleUseGroupRow").hidden=false;
+    $("formatStyleUseGroup").checked=useGroup;
+    $("formatStyleInheritedNotice").hidden=!useGroup;
+
+    if(useGroup){
+      writeStyleFields(group.style);
+      setStyleFieldsDisabled(true);
+    }else{
+      writeStyleFields(entry.style);
+      setStyleFieldsDisabled(false);
     }
   }
 
   function commitEditor(){
-    const group=currentGroup();
+    const group=ensureGroupShape(currentGroup());
     if(!group)return;
 
-    group.name=$("formatGroupNameInput").value.normalize("NFKC").trim();
-    group.style=readGroupStyle();
-    group.formats=group.formats || {};
-    group.formatStyles=group.formatStyles || {};
+    commitStylePanel(selectedStyleTarget);
+
+    group.name=
+      String($("formatGroupNameInput").value||"")
+        .normalize("NFKC")
+        .trim();
 
     for(const item of global.ParanPaperData.REFERENCE_FORMAT_ITEMS){
       const editor=document.querySelector(
         `[data-format-key="${item.key}"]`
       );
-      const checkbox=document.querySelector(
-        `[data-format-override="${item.key}"]`
-      );
-      const panel=document.querySelector(
-        `[data-format-style-key="${item.key}"]`
-      );
-
-      group.formats[item.key]=sanitizeEditorHtml(editor);
-      group.formatStyles[item.key]={
-        useGroupStyle:!checkbox?.checked,
-        style:readStyleControls(panel)
-      };
+      if(editor){
+        group.formats[item.key]=sanitizeEditorHtml(editor);
+      }
     }
   }
 
   function renderGroupList(){
-    const list=$("formatGroupList");
-    list.replaceChildren();
+    const host=$("formatGroupList");
+    host.replaceChildren();
 
     for(const group of working){
       const button=document.createElement("button");
@@ -349,19 +277,21 @@
       name.textContent=group.name || "(이름 없음)";
 
       const detail=document.createElement("small");
-      detail.textContent="6개 형식 · 글자/문단 서식";
+      detail.textContent="6개 참고문헌 형식";
 
       button.append(name,detail);
-
       button.onclick=()=>{
         if(group.id===selectedId)return;
+
         commitEditor();
         selectedId=group.id;
+        selectedStyleTarget="group";
+
         renderGroupList();
         renderEditor();
       };
 
-      list.append(button);
+      host.append(button);
     }
 
     $("formatGroupDeleteBtn").disabled=working.length<=1 || !selectedId;
@@ -369,69 +299,52 @@
   }
 
   function renderEditor(){
-    const group=currentGroup();
+    const group=ensureGroupShape(currentGroup());
     const enabled=!!group;
 
     $("formatGroupNameInput").disabled=!enabled;
     $("formatGroupNameInput").value=group?.name || "";
 
-    for(const id of Object.values(GROUP_STYLE_IDS)){
-      $(id).disabled=!enabled;
-    }
-
-    if(group)writeGroupStyle(group.style);
-
     for(const item of global.ParanPaperData.REFERENCE_FORMAT_ITEMS){
       const editor=document.querySelector(
         `[data-format-key="${item.key}"]`
       );
-      const checkbox=document.querySelector(
-        `[data-format-override="${item.key}"]`
-      );
-      const panel=document.querySelector(
-        `[data-format-style-key="${item.key}"]`
-      );
+      if(!editor)continue;
 
       editor.contentEditable=enabled ? "true" : "false";
       editor.innerHTML=group?.formats?.[item.key] || "";
-
-      const entry=group?.formatStyles?.[item.key] || {
-        useGroupStyle:true,
-        style:group?.style
-      };
-
-      checkbox.disabled=!enabled;
-      checkbox.checked=entry.useGroupStyle===false;
-      writeStyleControls(panel,entry.style || group?.style);
-      updateOverridePanelState(item.key);
     }
-  }
 
-  function createBaseGroup(){
-    const base=
-      global.ParanPaperData.cloneDefaultReferenceFormatGroups()[0];
-
-    return {
-      ...clone(base),
-      id:newGroupId(),
-      name:uniqueGroupName("새 양식")
-    };
+    renderStylePanel();
   }
 
   function addGroup(){
     commitEditor();
-    const group=createBaseGroup();
+
+    const base=
+      global.ParanPaperData.cloneDefaultReferenceFormatGroups()[0];
+
+    const group={
+      ...clone(base),
+      id:newGroupId(),
+      name:uniqueGroupName("새 양식")
+    };
+
     working.push(group);
     selectedId=group.id;
+    selectedStyleTarget="group";
+
     renderGroupList();
     renderEditor();
     setDirty(true);
+
     $("formatGroupNameInput").focus();
     $("formatGroupNameInput").select();
   }
 
   function duplicateGroup(){
     commitEditor();
+
     const source=currentGroup();
     if(!source)return;
 
@@ -443,6 +356,8 @@
 
     working.push(copy);
     selectedId=copy.id;
+    selectedStyleTarget="group";
+
     renderGroupList();
     renderEditor();
     setDirty(true);
@@ -467,6 +382,8 @@
       working[0]?.id ||
       null;
 
+    selectedStyleTarget="group";
+
     renderGroupList();
     renderEditor();
     setDirty(true);
@@ -479,29 +396,31 @@
       throw new Error("참고문헌 양식 그룹이 하나 이상 필요합니다.");
     }
 
-    const names=new Set();
-    const normalize=
+    const normalizeName=
       global.ParanPaperData.normalizeReferenceFormatGroupName;
+    const names=new Set();
 
-    for(const group of working){
+    const normalized=
+      global.ParanPaperData.normalizeReferenceFormatGroups(working);
+
+    for(const group of normalized){
       const name=String(group.name||"").trim();
       if(!name)throw new Error("양식 그룹 이름이 비어 있습니다.");
 
-      const nameKey=normalize(name);
-      if(names.has(nameKey)){
+      const key=normalizeName(name);
+      if(names.has(key)){
         throw new Error(`양식 그룹 이름이 중복됩니다: ${name}`);
       }
-      names.add(nameKey);
+      names.add(key);
 
       for(const item of global.ParanPaperData.REFERENCE_FORMAT_ITEMS){
-        const html=group.formats?.[item.key] || "";
-        if(!global.ParanPaperData.templateText(html)){
+        if(!global.ParanPaperData.templateText(group.formats?.[item.key])){
           throw new Error(`"${name}"의 ${item.label} 템플릿이 비어 있습니다.`);
         }
       }
     }
 
-    return global.ParanPaperData.normalizeReferenceFormatGroups(working);
+    return normalized;
   }
 
   async function save(){
@@ -560,21 +479,20 @@
   function handleTemplatePaste(event){
     event.preventDefault();
 
-    const clipboard=event.clipboardData;
-    const sourceHtml=clipboard?.getData("text/html") || "";
-    const sourceText=clipboard?.getData("text/plain") || "";
+    const html=event.clipboardData?.getData("text/html") || "";
+    const plain=event.clipboardData?.getData("text/plain") || "";
 
-    if(sourceHtml){
+    if(html){
       document.execCommand(
         "insertHTML",
         false,
-        sanitizeClipboardHtml(sourceHtml)
+        sanitizeClipboardHtml(html)
       );
     }else{
       document.execCommand(
         "insertText",
         false,
-        sourceText.replace(/\r?\n/g," ")
+        plain.replace(/\r?\n/g," ")
       );
     }
 
@@ -605,7 +523,6 @@
     if(initialized)return;
     initialized=true;
 
-    ensureFormatStyleControls();
     renderCodeHelp();
 
     $("formatGroupNewBtn").onclick=addGroup;
@@ -616,22 +533,16 @@
     $("formatCloseIconBtn").onclick=close;
 
     $("formatGroupNameInput").addEventListener("input",()=>{
-      commitEditor();
+      const group=currentGroup();
+      if(group){
+        group.name=
+          String($("formatGroupNameInput").value||"")
+            .normalize("NFKC")
+            .trim();
+      }
       renderGroupList();
       setDirty(true);
     });
-
-    for(const id of Object.values(GROUP_STYLE_IDS)){
-      const control=$(id);
-      control.addEventListener("input",()=>{
-        commitEditor();
-        setDirty(true);
-      });
-      control.addEventListener("change",()=>{
-        commitEditor();
-        setDirty(true);
-      });
-    }
 
     for(const editor of document.querySelectorAll(".format-template-editor")){
       editor.addEventListener("input",()=>{
@@ -640,6 +551,35 @@
       });
       editor.addEventListener("keydown",handleTemplateKeydown);
       editor.addEventListener("paste",handleTemplatePaste);
+    }
+
+    $("formatStyleTargetSelect").addEventListener("change",event=>{
+      commitStylePanel(selectedStyleTarget);
+      selectedStyleTarget=String(event.target.value||"group");
+      renderStylePanel();
+    });
+
+    $("formatStyleUseGroup").addEventListener("change",()=>{
+      const group=ensureGroupShape(currentGroup());
+      if(!group || selectedStyleTarget==="group")return;
+
+      const entry=formatEntry(group,selectedStyleTarget);
+      entry.useGroupStyle=$("formatStyleUseGroup").checked;
+
+      renderStylePanel();
+      setDirty(true);
+    });
+
+    for(const id of Object.values(STYLE_CONTROL_IDS)){
+      const control=$(id);
+      control.addEventListener("input",()=>{
+        commitStylePanel(selectedStyleTarget);
+        setDirty(true);
+      });
+      control.addEventListener("change",()=>{
+        commitStylePanel(selectedStyleTarget);
+        setDirty(true);
+      });
     }
 
     $("formatManagerDialog").addEventListener("cancel",event=>{
@@ -652,7 +592,9 @@
     bind();
 
     working=clone(
-      global.ParanPaperData.normalizeReferenceFormatGroups(options.groups)
+      global.ParanPaperData.normalizeReferenceFormatGroups(
+        options.groups
+      )
     );
 
     saveCallback=
@@ -666,13 +608,15 @@
         ? options.selectedId
         : working[0]?.id || null;
 
+    selectedStyleTarget="group";
     dirty=false;
+
     renderGroupList();
     renderEditor();
     setDirty(false);
 
     setState(
-      `양식 그룹 ${working.length}개 · 공통 서식 또는 형식별 개별 서식을 지정할 수 있습니다.`
+      `양식 그룹 ${working.length}개 · 템플릿 아래에서 글자·문단 스타일을 설정합니다.`
     );
 
     $("formatManagerDialog").showModal();

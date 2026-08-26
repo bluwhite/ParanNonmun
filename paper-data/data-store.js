@@ -49,14 +49,17 @@
   ];
 
   const DEFAULT_REFERENCE_STYLE = Object.freeze({
-    fontFamily:"바탕",
+    fontFamily:"HCR Dotum",
     fontSizePt:10,
-    lineHeightPercent:160,
-    leftIndentPt:20,
-    hangingIndentPt:20,
+    fontScalePercent:100,
+    letterSpacingPercent:0,
+    lineHeightPercent:180,
+    leftIndentPt:6,
+    rightIndentPt:0,
+    hangingIndentPt:30,
     spaceBeforePt:0,
     spaceAfterPt:0,
-    alignment:"left"
+    alignment:"justify"
   });
 
   const REFERENCE_ALIGNMENTS = Object.freeze([
@@ -92,15 +95,33 @@
         5,
         72
       ),
+      fontScalePercent:finiteNumber(
+        raw?.fontScalePercent,
+        Number(base.fontScalePercent)||100,
+        50,
+        200
+      ),
+      letterSpacingPercent:finiteNumber(
+        raw?.letterSpacingPercent,
+        Number(base.letterSpacingPercent)||0,
+        -50,
+        100
+      ),
       lineHeightPercent:finiteNumber(
         raw?.lineHeightPercent,
-        Number(base.lineHeightPercent)||160,
+        Number(base.lineHeightPercent)||180,
         80,
         400
       ),
       leftIndentPt:finiteNumber(
         raw?.leftIndentPt,
         Number(base.leftIndentPt)||0,
+        0,
+        300
+      ),
+      rightIndentPt:finiteNumber(
+        raw?.rightIndentPt,
+        Number(base.rightIndentPt)||0,
         0,
         300
       ),
@@ -279,10 +300,19 @@
   }
 
   function normalizeReferenceFormatGroup(raw={},fallback=null){
-    const base=fallback || DEFAULT_REFERENCE_FORMAT_GROUPS[0];
+    const source=
+      raw && typeof raw==="object" && !Array.isArray(raw)
+        ? raw
+        : {};
+
+    const base=
+      fallback && typeof fallback==="object"
+        ? fallback
+        : DEFAULT_REFERENCE_FORMAT_GROUPS[0];
+
     const sourceFormats=
-      raw && typeof raw.formats==="object"
-        ? raw.formats
+      source.formats && typeof source.formats==="object"
+        ? source.formats
         : {};
 
     const formats={};
@@ -303,18 +333,18 @@
     }
 
     const style=normalizeReferenceStyle(
-      raw?.style,
+      source.style,
       base?.style || DEFAULT_REFERENCE_STYLE
     );
 
     const formatStyles=normalizeFormatStyles(
-      raw?.formatStyles,
+      source.formatStyles,
       style
     );
 
     return {
-      id:String(raw.id||"").trim() || newId("ref-group"),
-      name:String(raw.name||"").normalize("NFKC").trim(),
+      id:String(source.id||"").trim() || newId("ref-group"),
+      name:String(source.name||"").normalize("NFKC").trim(),
       style,
       formatStyles,
       formats
@@ -546,6 +576,35 @@
     sheet.rowCount=Math.max(Number(sheet.rowCount)||0,targetRow+50);
   }
 
+  function referenceStylesNeedMigration(groups){
+    if(!Array.isArray(groups) || !groups.length)return true;
+
+    return groups.some(group=>{
+      if(!group || typeof group!=="object" || Array.isArray(group)){
+        return true;
+      }
+
+      if(!group.style || typeof group.style!=="object"){
+        return true;
+      }
+
+      if(!group.formatStyles || typeof group.formatStyles!=="object"){
+        return true;
+      }
+
+      return REFERENCE_FORMAT_ITEMS.some(item=>{
+        const entry=group.formatStyles[item.key];
+        return (
+          !entry ||
+          typeof entry!=="object" ||
+          typeof entry.useGroupStyle!=="boolean" ||
+          !entry.style ||
+          typeof entry.style!=="object"
+        );
+      });
+    });
+  }
+
   class PaperDataStore{
     constructor(rootHandle){
       this.rootHandle=rootHandle;
@@ -576,7 +635,8 @@
       const needsMigration=
         Number(parsed?.schemaVersion||0)<SCHEMA_VERSION ||
         !Array.isArray(parsed?.referenceFormatGroups) ||
-        !parsed.referenceFormatGroups.length;
+        !parsed.referenceFormatGroups.length ||
+        referenceStylesNeedMigration(parsed.referenceFormatGroups);
 
       this.data=normalizeData(parsed);
 

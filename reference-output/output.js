@@ -202,12 +202,17 @@
       s.leftIndentPt
     );
 
+    const letterSpacingEm=
+      Number(s.letterSpacingPercent||0)/100;
+
     return [
       `font-family:${cssFontFamily(s.fontFamily)}`,
       `font-size:${s.fontSizePt}pt`,
+      `font-stretch:${s.fontScalePercent}%`,
+      `letter-spacing:${letterSpacingEm}em`,
       `line-height:${s.lineHeightPercent}%`,
       `margin-top:${s.spaceBeforePt}pt`,
-      `margin-right:0pt`,
+      `margin-right:${s.rightIndentPt}pt`,
       `margin-bottom:${s.spaceAfterPt}pt`,
       `margin-left:${s.leftIndentPt}pt`,
       `padding-left:0pt`,
