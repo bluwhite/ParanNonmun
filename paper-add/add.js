@@ -1,5 +1,5 @@
 const ADD_FIELDS=[
-  ["check","확인(*)",false],["authors","저자",true],["year","출판연도",false],
+  ["authors","저자",true],["year","출판연도",false],
   ["title","논문명",true],["journal","학술지명",true],["volume","권",false],
   ["issue","호",false],["publisher","학회명",true],["startPage","시작페이지",false],
   ["endPage","끝페이지",false],["memo","메모",true],["pdf","PDF",true]
