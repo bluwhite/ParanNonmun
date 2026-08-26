@@ -19,7 +19,7 @@
       <button id="chooseBtn" class="primary folder-select-btn">논문 폴더 선택</button>
       <button id="excelImportBtn" class="tiny-button" disabled>엑셀 가져오기</button>
       <button id="referenceFormatBtn" class="tiny-button" disabled>참고문헌 형식</button>
-      <button id="referenceOutputBtn" class="tiny-button" disabled>참고문헌 출력</button>
+      <button id="referenceOutputBtn" class="tiny-button reference-output-main-btn" disabled>참고문헌 출력</button>
       <button id="downloadFolderBtn" class="tiny-button">다운로드 위치</button>
       <button id="aiSettingsBtn" class="tiny-button" disabled>AI 설정</button>
     </div>
@@ -137,25 +137,25 @@
       <div>
         <h2>참고문헌 양식 관리</h2>
         <p>
-          기존 방식대로 6개 참고문헌 템플릿을 편집하고,
-          아래쪽에서 글자 모양·문단 모양을 따로 지정합니다.
+          양식 그룹을 선택한 뒤 템플릿을 편집하고,
+          마지막에 글자·문단 스타일을 지정합니다.
           템플릿에서 글자를 선택한 뒤 <strong>Ctrl+I</strong>로 이탤릭을 적용할 수 있습니다.
         </p>
       </div>
       <button id="formatCloseIconBtn" type="button" class="icon-button" aria-label="닫기">×</button>
     </div>
 
-    <div class="format-manager-body">
-      <aside class="format-list-pane">
-        <div class="format-pane-title">양식 그룹</div>
-        <div id="formatGroupList" class="format-list"></div>
+    <div class="format-manager-body format-manager-body-stacked">
+      <section class="format-list-pane format-list-pane-top">
+        <div class="format-pane-title">1. 양식 그룹</div>
+        <div id="formatGroupList" class="format-list format-list-horizontal"></div>
 
-        <div class="format-list-actions">
+        <div class="format-list-actions format-list-actions-inline">
           <button id="formatGroupNewBtn" type="button">추가</button>
           <button id="formatGroupDuplicateBtn" type="button">복제</button>
           <button id="formatGroupDeleteBtn" type="button">삭제</button>
         </div>
-      </aside>
+      </section>
 
       <section class="format-editor-pane">
         <label class="format-field">
@@ -163,51 +163,60 @@
           <input id="formatGroupNameInput" type="text" autocomplete="off">
         </label>
 
-        <div class="format-template-list">
-          <div class="format-template-row">
-            <div class="format-template-label">학회지_국내</div>
-            <div class="format-template-editor" data-format-key="journalKo"
-                 contenteditable="true" spellcheck="false"></div>
+        <section class="format-template-section">
+          <div class="format-subsection-title">2. 템플릿</div>
+
+          <div class="format-template-list">
+            <div class="format-template-row">
+              <div class="format-template-label">학회지_국내</div>
+              <div class="format-template-editor" data-format-key="journalKo"
+                   contenteditable="true" spellcheck="false"></div>
+            </div>
+
+            <div class="format-template-row">
+              <div class="format-template-label">학위_국내</div>
+              <div class="format-template-editor" data-format-key="thesisKo"
+                   contenteditable="true" spellcheck="false"></div>
+            </div>
+
+            <div class="format-template-row">
+              <div class="format-template-label">단행본_국내</div>
+              <div class="format-template-editor" data-format-key="bookKo"
+                   contenteditable="true" spellcheck="false"></div>
+            </div>
+
+            <div class="format-template-row">
+              <div class="format-template-label">학회지_해외</div>
+              <div class="format-template-editor" data-format-key="journalEn"
+                   contenteditable="true" spellcheck="false"></div>
+            </div>
+
+            <div class="format-template-row">
+              <div class="format-template-label">학위_해외</div>
+              <div class="format-template-editor" data-format-key="thesisEn"
+                   contenteditable="true" spellcheck="false"></div>
+            </div>
+
+            <div class="format-template-row">
+              <div class="format-template-label">단행본_해외</div>
+              <div class="format-template-editor" data-format-key="bookEn"
+                   contenteditable="true" spellcheck="false"></div>
+            </div>
           </div>
 
-          <div class="format-template-row">
-            <div class="format-template-label">학위_국내</div>
-            <div class="format-template-editor" data-format-key="thesisKo"
-                 contenteditable="true" spellcheck="false"></div>
+          <div class="format-editor-note">
+            템플릿 문자는 직접 수정합니다. 이탤릭이 필요한 부분은 텍스트를 선택하고
+            <strong>Ctrl+I</strong>를 누르면 템플릿 자체에 저장됩니다.
           </div>
 
-          <div class="format-template-row">
-            <div class="format-template-label">단행본_국내</div>
-            <div class="format-template-editor" data-format-key="bookKo"
-                 contenteditable="true" spellcheck="false"></div>
+          <div class="format-code-guide format-code-guide-before-style">
+            <div class="format-subsection-title">템플릿 코드 안내</div>
+            <div id="formatCodeHelp" class="format-code-help"></div>
           </div>
-
-          <div class="format-template-row">
-            <div class="format-template-label">학회지_해외</div>
-            <div class="format-template-editor" data-format-key="journalEn"
-                 contenteditable="true" spellcheck="false"></div>
-          </div>
-
-          <div class="format-template-row">
-            <div class="format-template-label">학위_해외</div>
-            <div class="format-template-editor" data-format-key="thesisEn"
-                 contenteditable="true" spellcheck="false"></div>
-          </div>
-
-          <div class="format-template-row">
-            <div class="format-template-label">단행본_해외</div>
-            <div class="format-template-editor" data-format-key="bookEn"
-                 contenteditable="true" spellcheck="false"></div>
-          </div>
-        </div>
-
-        <div class="format-editor-note">
-          템플릿 문자는 기존 방식대로 직접 수정합니다. 이탤릭이 필요한 부분은 텍스트를 선택하고
-          <strong>Ctrl+I</strong>를 누르면 템플릿 자체에 저장됩니다.
-        </div>
+        </section>
 
         <section class="reference-style-section reference-style-section-bottom">
-          <div class="format-subsection-title">글자·문단 스타일</div>
+          <div class="format-subsection-title">3. 글자·문단 스타일</div>
 
           <div class="reference-style-target-row">
             <label>
@@ -234,47 +243,47 @@
           </div>
 
           <div id="formatStyleFields" class="reference-style-grid reference-style-grid-bottom">
-            <label><span>글꼴</span>
+            <label class="style-field style-field-font"><span>글꼴</span>
               <input id="formatStyleFontFamily" class="reference-style-control"
                      list="referenceFontList" type="text" autocomplete="off">
             </label>
-            <label><span>크기(pt)</span>
+            <label class="style-field"><span>크기(pt)</span>
               <input id="formatStyleFontSize" class="reference-style-control"
                      type="number" min="5" max="72" step="0.5">
             </label>
-            <label><span>장평(%)</span>
+            <label class="style-field"><span>장평(%)</span>
               <input id="formatStyleFontScale" class="reference-style-control"
                      type="number" min="50" max="200" step="1">
             </label>
-            <label><span>자간(%)</span>
+            <label class="style-field"><span>자간(%)</span>
               <input id="formatStyleLetterSpacing" class="reference-style-control"
                      type="number" min="-50" max="100" step="1">
             </label>
-            <label><span>줄간격(%)</span>
+            <label class="style-field"><span>줄간격(%)</span>
               <input id="formatStyleLineHeight" class="reference-style-control"
                      type="number" min="80" max="400" step="5">
             </label>
-            <label><span>왼쪽 여백(pt)</span>
+            <label class="style-field"><span>왼쪽(pt)</span>
               <input id="formatStyleLeftIndent" class="reference-style-control"
                      type="number" min="0" max="300" step="1">
             </label>
-            <label><span>오른쪽 여백(pt)</span>
+            <label class="style-field"><span>오른쪽(pt)</span>
               <input id="formatStyleRightIndent" class="reference-style-control"
                      type="number" min="0" max="300" step="1">
             </label>
-            <label><span>내어쓰기(pt)</span>
+            <label class="style-field"><span>내어쓰기(pt)</span>
               <input id="formatStyleHangingIndent" class="reference-style-control"
                      type="number" min="0" max="300" step="1">
             </label>
-            <label><span>문단 위(pt)</span>
+            <label class="style-field"><span>문단 위(pt)</span>
               <input id="formatStyleSpaceBefore" class="reference-style-control"
                      type="number" min="0" max="200" step="1">
             </label>
-            <label><span>문단 아래(pt)</span>
+            <label class="style-field"><span>문단 아래(pt)</span>
               <input id="formatStyleSpaceAfter" class="reference-style-control"
                      type="number" min="0" max="200" step="1">
             </label>
-            <label><span>정렬</span>
+            <label class="style-field"><span>정렬</span>
               <select id="formatStyleAlignment" class="reference-style-control">
                 <option value="left">왼쪽</option>
                 <option value="justify">양쪽</option>
@@ -302,11 +311,6 @@
           <option value="Times New Roman"></option>
           <option value="Arial"></option>
         </datalist>
-
-        <div class="format-code-guide">
-          <div class="format-subsection-title">템플릿 코드 안내</div>
-          <div id="formatCodeHelp" class="format-code-help"></div>
-        </div>
       </section>
     </div>
 

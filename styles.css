@@ -822,3 +822,189 @@ th{position:sticky;top:0;background:#f8fafc;color:#475569;font-size:12px;z-index
   outline:0 !important;
   background:transparent !important;
 }
+
+
+/* v0.14.0 - 참고문헌 양식 창 세로 구성 */
+.format-manager-body.format-manager-body-stacked{
+  display:block;
+  min-height:0;
+  overflow:auto;
+}
+
+.format-list-pane.format-list-pane-top{
+  display:block;
+  padding:14px 18px;
+  border-right:0;
+  border-bottom:1px solid #e5e7eb;
+  background:#f8fafc;
+}
+
+.format-list-horizontal{
+  min-height:0;
+  max-height:none;
+  overflow:visible;
+  display:flex;
+  flex-direction:row;
+  flex-wrap:wrap;
+  gap:7px;
+  margin-top:8px;
+}
+
+.format-list-horizontal .format-list-item{
+  width:auto;
+  min-width:150px;
+  flex:0 1 210px;
+}
+
+.format-list-actions-inline{
+  display:flex;
+  grid-template-columns:none;
+  gap:6px;
+  padding-top:9px;
+}
+
+.format-list-actions-inline button{
+  min-width:72px;
+}
+
+.format-editor-pane{
+  overflow:visible;
+}
+
+.format-template-section{
+  margin-top:4px;
+}
+
+.format-code-guide-before-style{
+  margin-top:14px;
+  padding-top:12px;
+  padding-bottom:2px;
+}
+
+.reference-style-section-bottom{
+  margin-top:20px;
+}
+
+/* 메인 상단의 참고문헌 출력 버튼을 핵심 작업 버튼으로 강조 */
+#referenceOutputBtn.reference-output-main-btn:not(:disabled){
+  padding:7px 13px;
+  border:1px solid #1d4ed8;
+  background:#2563eb;
+  color:#fff;
+  font-weight:800;
+  box-shadow:0 1px 2px rgba(15,23,42,.12);
+}
+
+#referenceOutputBtn.reference-output-main-btn:not(:disabled):hover{
+  background:#1d4ed8;
+}
+
+#referenceOutputBtn.reference-output-main-btn:disabled{
+  font-weight:700;
+}
+
+@media(max-width:700px){
+  .format-list-horizontal .format-list-item{
+    flex:1 1 100%;
+  }
+
+  .format-list-actions-inline{
+    flex-wrap:wrap;
+  }
+}
+
+
+/* v0.14.1 - 글자·문단 스타일 영역 compact layout */
+.reference-style-section-bottom{
+  padding:11px 13px 12px;
+}
+
+.reference-style-section-bottom .reference-style-target-row{
+  margin:6px 0 9px;
+  align-items:center;
+}
+
+.reference-style-section-bottom .reference-style-grid-bottom{
+  display:grid;
+  grid-template-columns:
+    minmax(220px,1.7fr)
+    repeat(4,minmax(120px,1fr));
+  gap:7px 10px;
+  align-items:center;
+}
+
+.reference-style-section-bottom .style-field{
+  display:grid;
+  grid-template-columns:auto minmax(62px,1fr);
+  align-items:center;
+  gap:6px;
+  min-width:0;
+}
+
+.reference-style-section-bottom .style-field>span{
+  white-space:nowrap;
+  margin:0;
+  font-size:10.5px;
+}
+
+.reference-style-section-bottom .style-field input,
+.reference-style-section-bottom .style-field select{
+  width:100%;
+  min-width:0;
+  height:30px;
+  padding:4px 6px;
+}
+
+.reference-style-section-bottom .style-field-font{
+  grid-column:span 1;
+}
+
+/* 두 줄에 최대한 고르게 배치 */
+.reference-style-section-bottom .style-field:nth-child(5){
+  grid-column:1;
+}
+
+.reference-style-section-bottom .style-field:nth-child(6),
+.reference-style-section-bottom .style-field:nth-child(7),
+.reference-style-section-bottom .style-field:nth-child(8),
+.reference-style-section-bottom .style-field:nth-child(9),
+.reference-style-section-bottom .style-field:nth-child(10),
+.reference-style-section-bottom .style-field:nth-child(11){
+  min-width:0;
+}
+
+/* 11개 항목을 두 줄에 가깝게 만들기 위해 두 번째 줄은 6열로 확장 */
+@media(min-width:1050px){
+  .reference-style-section-bottom .reference-style-grid-bottom{
+    grid-template-columns:
+      minmax(210px,1.55fr)
+      repeat(5,minmax(105px,1fr));
+  }
+
+  .reference-style-section-bottom .style-field:nth-child(1){
+    grid-column:span 1;
+  }
+}
+
+/* 중간 폭에서는 3열 */
+@media(max-width:1049px) and (min-width:701px){
+  .reference-style-section-bottom .reference-style-grid-bottom{
+    grid-template-columns:repeat(3,minmax(180px,1fr));
+  }
+}
+
+/* 작은 화면에서만 세로형 */
+@media(max-width:700px){
+  .reference-style-section-bottom .reference-style-grid-bottom{
+    grid-template-columns:1fr;
+  }
+
+  .reference-style-section-bottom .style-field{
+    grid-template-columns:105px minmax(0,1fr);
+  }
+}
+
+.reference-style-section-bottom .reference-style-help{
+  margin-top:7px;
+  font-size:10px;
+}

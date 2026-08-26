@@ -9,21 +9,16 @@
   let univerAPI=null;
   let changeDisposable=null;
   let commandDisposable=null;
-  let cellClickDisposable=null;
-  let hostDoubleClickElement=null;
-  let hostDoubleClickHandler=null;
   let currentData=null;
   let onDataChange=async()=>{};
   let onCount=()=>{};
   let onStatus=()=>{};
-  let onPdfDoubleClick=async()=>{};
   let syncTimer=null;
   let syncing=false;
   let restoring=false;
   let lastSnapshotJson="";
   let lastValidSnapshot=null;
   let findCursor={query:"",index:-1};
-  let lastPdfCellClick={row:-1,column:-1,time:0};
 
   function clone(value){
     return value==null ? value : JSON.parse(JSON.stringify(value));
@@ -397,36 +392,13 @@
     return syncNow(true);
   }
 
-  function firePdfDoubleClick(context){
-    // 데이터 행이면 어느 열의 셀을 더블클릭해도 그 행의 PDF를 연다.
-    if(!context || context.rowIndex<=0)return;
-
-    Promise.resolve(
-      onPdfDoubleClick(context)
-    ).catch(error=>{
-      console.error("PDF 더블클릭 열기 실패:",error);
-    });
-  }
 
   function disposeListeners(){
     try{changeDisposable?.dispose?.();}catch(_e){}
     try{commandDisposable?.dispose?.();}catch(_e){}
-    try{cellClickDisposable?.dispose?.();}catch(_e){}
-
-    if(hostDoubleClickElement && hostDoubleClickHandler){
-      try{
-        hostDoubleClickElement.removeEventListener(
-          "dblclick",
-          hostDoubleClickHandler
-        );
-      }catch(_e){}
-    }
 
     changeDisposable=null;
     commandDisposable=null;
-    cellClickDisposable=null;
-    hostDoubleClickElement=null;
-    hostDoubleClickHandler=null;
   }
 
   function disposeWorkbook(){
@@ -504,55 +476,9 @@
     }
 
     commandDisposable=
-      univerAPI.onCommandExecuted?.(()=>scheduleSync(300)) || null;
-
-    // Univer의 셀 클릭 이벤트가 있으면 같은 데이터 셀을 짧은 시간 안에
-    // 두 번 클릭한 것을 더블클릭으로 간주한다.
-    if(univerAPI.Event?.CellClicked){
-      cellClickDisposable=univerAPI.addEvent(
-        univerAPI.Event.CellClicked,
-        params=>{
-          const row=params?.row;
-          const column=params?.column;
-
-          if(!Number.isInteger(row) || !Number.isInteger(column))return;
-
-          const context=contextAt(row,column);
-
-          if(!context || context.rowIndex<=0){
-            lastPdfCellClick={row:-1,column:-1,time:0};
-            return;
-          }
-
-          const now=Date.now();
-          const isDouble=
-            lastPdfCellClick.row===row &&
-            lastPdfCellClick.column===column &&
-            now-lastPdfCellClick.time<=480;
-
-          lastPdfCellClick={row,column,time:now};
-
-          if(isDouble){
-            lastPdfCellClick={row:-1,column:-1,time:0};
-            firePdfDoubleClick(context);
-          }
-        }
-      );
-      return;
-    }
-
-    // 구버전에서 CellClicked가 노출되지 않는 경우 DOM dblclick을 보조로 사용.
-    const host=document.getElementById("paperSheet");
-    if(host){
-      hostDoubleClickElement=host;
-      hostDoubleClickHandler=()=>{
-        setTimeout(()=>{
-          const context=getSelectedRowContext();
-          firePdfDoubleClick(context);
-        },0);
-      };
-      host.addEventListener("dblclick",hostDoubleClickHandler);
-    }
+      univerAPI.onCommandExecuted?.(
+        ()=>scheduleSync(300)
+      ) || null;
   }
 
   function scheduleSync(delay=280){
@@ -921,7 +847,6 @@
     onDataChange=options.onDataChange || onDataChange;
     onCount=options.onCount || onCount;
     onStatus=options.onStatus || onStatus;
-    onPdfDoubleClick=options.onPdfDoubleClick || onPdfDoubleClick;
     ensureUniver(options.containerId);
     await loadWorkbook(options.data);
   }

@@ -63,8 +63,7 @@ async function mountPaperSheet(){
     data:paperData,
     onDataChange:savePaperData,
     onCount:setPaperCount,
-    onStatus:setSaveState,
-    onPdfDoubleClick:context=>openPdfFromRowContext(context,false)
+    onStatus:setSaveState
   });
 }
 
