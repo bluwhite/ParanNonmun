@@ -1,4 +1,4 @@
-/* 파란 논문 v0.13.6 - Word/아래한글 서식 매핑 보정 */
+/* 파란 논문 v0.13.7 - 아래한글 HStyle HTML 매핑 */
 (function(global){
   "use strict";
 
@@ -275,37 +275,67 @@
     ].join(";");
   }
 
-  function hwpStyleCss(style){
+  function hwpParagraphCss(style){
     const {
       s,
       hanging,
-      firstLineLeft,
-      lineHeightPt,
-      letterSpacingEm
+      wordParagraphLeft,
+      linePercent
     }=referenceMetrics(style);
 
-    // 아래한글의 인터넷 문서 import는 Word와 달리
-    // margin-left / text-indent를 비교적 직접 문단 값으로 읽는 경향을 이용한다.
-    // 따라서 한글 설정값 그대로:
-    //   왼쪽 여백 6pt
-    //   내어쓰기 30pt
-    // 를 전달한다.
+    // 실제 아래한글 import 결과에서
+    // margin-left:6pt + text-indent:-30pt -> 왼쪽 -24pt / 내어쓰기 30pt
+    // 로 해석되는 것이 확인되었다.
     //
-    // 줄간격 180%는 비율 대신 실제 18pt(10pt × 1.8)로 강제해
-    // HTML import 과정에서 무시되는 것을 줄인다.
+    // 원하는 값이 왼쪽 6pt / 내어쓰기 30pt이므로
+    // CSS paragraph margin-left는 6 + 30 = 36pt로 전달한다.
+    //
+    // 한컴이 자체적으로 생성하는 HTML과 비슷하게:
+    // - p class="HStyle0"
+    // - line-height:180%
+    // - mso-pagination:none
+    // - mso-padding-alt
+    // 를 사용한다.
     return [
-      `font-family:${cssFontFamily(s.fontFamily)}`,
-      `font-size:${s.fontSizePt}pt`,
-      `font-stretch:${s.fontScalePercent}%`,
-      `letter-spacing:${letterSpacingEm}em`,
-      `line-height:${lineHeightPt}pt`,
       `margin-top:${s.spaceBeforePt}pt`,
       `margin-right:${s.rightIndentPt}pt`,
       `margin-bottom:${s.spaceAfterPt}pt`,
-      `margin-left:${firstLineLeft}pt`,
-      "padding:0",
+      `margin-left:${wordParagraphLeft}pt`,
       `text-indent:-${hanging}pt`,
+      `line-height:${linePercent}%`,
+      `mso-line-height-alt:${linePercent}%`,
       `text-align:${s.alignment}`,
+      "word-break:keep-all",
+      "mso-pagination:none",
+      "mso-padding-alt:0pt 0pt 0pt 0pt",
+      "padding:0"
+    ].join(";");
+  }
+
+  function hwpTextCss(style){
+    const {
+      s,
+      linePercent
+    }=referenceMetrics(style);
+
+    const fontName=
+      clean(s.fontFamily) || "HCR Dotum";
+
+    const letterSpacing=
+      Number(s.letterSpacingPercent||0)/100;
+
+    return [
+      "position:relative",
+      `font-size:${s.fontSizePt}pt`,
+      `font-family:"${fontName.replace(/["\\]/g,"")}"`,
+      `line-height:${linePercent}%`,
+      `mso-line-height-alt:${linePercent}%`,
+      `letter-spacing:${letterSpacing}em`,
+      `mso-font-width:${s.fontScalePercent}%`,
+      `mso-fareast-font-family:"${fontName.replace(/["\\]/g,"")}"`,
+      `mso-ascii-font-family:"${fontName.replace(/["\\]/g,"")}"`,
+      `mso-hansi-font-family:"${fontName.replace(/["\\]/g,"")}"`,
+      "mso-text-raise:0pt",
       "font-weight:normal"
     ].join(";");
   }
@@ -876,11 +906,13 @@
         content?.innerHTML || ""
       );
 
-      // 불필요한 wrapper 없이 참고문헌 문단 div만 만든다.
+      // 한컴이 HTML을 내보낼 때 사용하는 구조를 최대한 단순하게 따른다.
+      // p와 span 양쪽에 line-height를 넣는 것이 핵심이다.
       return (
-        `<div style="${hwpStyleCss(style)}">`+
+        `<p class="HStyle0" style="${hwpParagraphCss(style)}">`+
+        `<span style="${hwpTextCss(style)}">`+
         html+
-        "</div>"
+        "</span></p>"
       );
     }).join("");
 
