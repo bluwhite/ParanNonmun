@@ -745,6 +745,158 @@
     return true;
   }
 
+
+  function getColumnHeaders(){
+    const workbook=getActiveWorkbook();
+    if(!workbook)return [];
+
+    const snapshot=workbook.save();
+    const sheet=getManagedSheet(snapshot);
+
+    return sheet
+      ? getHeaders(sheet)
+          .filter(header=>header.name!=="")
+          .map(header=>({
+            index:header.index,
+            name:header.name
+          }))
+      : [];
+  }
+
+  function lastUsedRow(sheet){
+    let maxUsedRow=0;
+
+    for(const rowKey of Object.keys(sheet?.cellData || {})){
+      const rowIndex=Number(rowKey);
+      if(!Number.isFinite(rowIndex) || rowIndex<=0)continue;
+
+      const cells=sheet.cellData[rowKey] || {};
+      const hasValue=Object.values(cells)
+        .some(cell=>cellText(cell).trim()!=="");
+
+      if(hasValue && rowIndex>maxUsedRow){
+        maxUsedRow=rowIndex;
+      }
+    }
+
+    return maxUsedRow;
+  }
+
+  async function appendImportedRows(records){
+    if(!Array.isArray(records) || !records.length){
+      return {
+        count:0,
+        data:currentData
+      };
+    }
+
+    clearTimeout(syncTimer);
+
+    const workbook=getActiveWorkbook();
+    if(!workbook){
+      throw new Error("논문 목록 시트를 찾지 못했습니다.");
+    }
+
+    try{
+      await workbook.endEditingAsync?.(true);
+    }catch(_e){}
+
+    const snapshot=workbook.save();
+    const validation=validateManagedSheet(snapshot);
+
+    if(!validation.ok){
+      throw new Error(validation.message);
+    }
+
+    const managed=getManagedSheet(snapshot);
+    if(!managed){
+      throw new Error("논문 목록 시트를 찾지 못했습니다.");
+    }
+
+    managed.cellData=managed.cellData || {};
+
+    const headers=getHeaders(managed)
+      .filter(header=>header.name!=="");
+
+    const normalizedHeaders=headers.map(header=>({
+      ...header,
+      key:global.ParanPaperData.normalizeColumnName(header.name)
+    }));
+
+    let targetRow=Math.max(1,lastUsedRow(managed)+1);
+    const startRow=targetRow;
+    let count=0;
+
+    for(const record of records){
+      if(!record || typeof record!=="object")continue;
+
+      const rowData={};
+      let hasValue=false;
+
+      for(const header of normalizedHeaders){
+        const value=String(
+          record[header.key] ?? ""
+        );
+
+        if(value.trim()==="")continue;
+
+        rowData[header.index]={v:value};
+        hasValue=true;
+      }
+
+      if(!hasValue)continue;
+
+      managed.cellData[targetRow]=rowData;
+      targetRow++;
+      count++;
+    }
+
+    if(!count){
+      return {
+        count:0,
+        data:currentData
+      };
+    }
+
+    managed.rowCount=Math.max(
+      Number(managed.rowCount)||0,
+      targetRow+80
+    );
+
+    const next=deriveDataFromSnapshot(
+      snapshot,
+      currentData
+    );
+
+    currentData=next;
+    lastValidSnapshot=clone(snapshot);
+    lastSnapshotJson=JSON.stringify(snapshot);
+
+    onCount(next.papers.length);
+    onStatus("엑셀 데이터 저장 중...","saving");
+
+    await onDataChange(next);
+
+    // 저장한 스냅샷을 다시 표시하면 현재 열 순서/너비/서식 및
+    // 사용자가 만든 다른 시트를 그대로 유지하면서 새 행이 즉시 나타난다.
+    await loadWorkbook(next);
+
+    const worksheet=getManagedWorksheet();
+
+    try{
+      worksheet?.getRange(startRow,0)?.activate?.();
+      worksheet?.scrollToCell?.(startRow,0,180);
+    }catch(_e){}
+
+    onStatus("저장됨","saved");
+
+    return {
+      count,
+      startRow,
+      data:next
+    };
+  }
+
   async function flush(){
     clearTimeout(syncTimer);
     const workbook=getActiveWorkbook();
@@ -775,6 +927,8 @@
     addColumn,
     moveSelectedColumn,
     findNext,
+    getColumnHeaders,
+    appendImportedRows,
     getSelectedRowContext,
     setSystemFieldAtRow,
     getData

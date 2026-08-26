@@ -26,7 +26,7 @@ async function walk(dir,prefix=""){
 function setFolderReady(ready){
   for(const id of [
     "noteSearchBtn","addPaperBtn","paperFindBtn","aiSettingsBtn",
-    "pdfLinkBtn","pdfOpenBtn"
+    "pdfLinkBtn","pdfOpenBtn","excelImportBtn"
   ]){
     const el=$(id);
     if(el)el.disabled=!ready;
@@ -105,6 +105,99 @@ async function findInSheet(){
   if(!query.trim())return;
   const found=await ParanPaperSheet.findNext(query);
   if(!found)alert(`"${query.trim()}"을(를) 찾지 못했습니다.`);
+}
+
+
+async function importExcelReferences(){
+  if(!rootHandle || !dataStore){
+    alert("먼저 논문 폴더를 선택하세요.");
+    return;
+  }
+
+  try{
+    const headers=
+      ParanPaperSheet.getColumnHeaders?.() || [];
+
+    if(!headers.length){
+      throw new Error(
+        "현재 논문 목록의 열 정보를 읽지 못했습니다."
+      );
+    }
+
+    setSaveState(
+      "가져올 Excel 파일을 선택하세요.",
+      "saving"
+    );
+
+    const parsed=
+      await ParanExcelImport.pickAndParse(headers);
+
+    if(!parsed){
+      setSaveState("저장됨","saved");
+      return;
+    }
+
+    if(!parsed.rows.length){
+      throw new Error(
+        "제목 행 아래에서 가져올 참고문헌 데이터를 찾지 못했습니다."
+      );
+    }
+
+    const matched=parsed.matchedHeaders.join(", ");
+
+    const ok=confirm(
+      `${parsed.fileName}\n\n`+
+      `시트: ${parsed.sheetName}\n`+
+      `제목 행: ${parsed.headerRow}행\n`+
+      `일치한 열: ${matched}\n`+
+      `가져올 행: ${parsed.rows.length}개\n\n`+
+      "현재 논문 목록의 마지막 행 뒤에 추가할까요?"
+    );
+
+    if(!ok){
+      setSaveState(
+        "엑셀 가져오기를 취소했습니다."
+      );
+      return;
+    }
+
+    setSaveState(
+      `엑셀 ${parsed.rows.length}개 행 가져오는 중...`,
+      "saving"
+    );
+
+    const result=
+      await ParanPaperSheet.appendImportedRows(
+        parsed.rows
+      );
+
+    if(!result.count){
+      throw new Error(
+        "현재 시트의 컬럼명과 일치하는 데이터가 없습니다."
+      );
+    }
+
+    paperData=result.data || ParanPaperSheet.getData();
+    setPaperCount(paperData?.papers?.length || 0);
+
+    setSaveState(
+      `엑셀 가져오기 완료 · ${result.count}개 · ${parsed.sheetName} ${parsed.headerRow}행 제목`,
+      "saved"
+    );
+  }catch(error){
+    if(error?.name==="AbortError"){
+      setSaveState("저장됨","saved");
+      return;
+    }
+
+    console.error(error);
+
+    const message=
+      `엑셀 가져오기 실패: ${error.message}`;
+
+    setSaveState(message,"error");
+    alert(message);
+  }
 }
 
 
@@ -594,6 +687,8 @@ $("addPaperBtn").onclick=async()=>{
   );
 };
 
+
+$("excelImportBtn").onclick=importExcelReferences;
 
 $("aiSettingsBtn").onclick=openAiSettings;
 

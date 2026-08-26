@@ -17,6 +17,7 @@
       </div>
       <span id="folderInfo" class="folder-info">현재 폴더: 선택되지 않음</span>
       <button id="chooseBtn" class="primary folder-select-btn">논문 폴더 선택</button>
+      <button id="excelImportBtn" class="tiny-button" disabled>엑셀 가져오기</button>
       <button id="downloadFolderBtn" class="tiny-button">다운로드 위치</button>
       <button id="aiSettingsBtn" class="tiny-button" disabled>AI 설정</button>
     </div>
@@ -100,10 +101,12 @@
 <script src="https://unpkg.com/@univerjs/preset-sheets-core@0.15.4/lib/umd/index.js"></script>
 <script src="https://unpkg.com/@univerjs/preset-sheets-core@0.15.4/lib/umd/locales/en-US.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="./shared.js"></script>
 <script src="./ai-config/credential-store.js"></script>
 <script src="./paper-data/data-store.js"></script>
 <script src="./paper-sheet/univer-sheet.js"></script>
+<script src="./excel-import/excel-import.js"></script>
 <script src="./pdf-link/pdf-link.js"></script>
 <script src="./pdf-search/note-search.js"></script>
 <script src="./main.js"></script>
