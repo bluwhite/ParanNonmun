@@ -1,4 +1,4 @@
-/* 파란 논문 v0.13.7 - 아래한글 HStyle HTML 매핑 */
+/* 파란 논문 v0.13.8 - 아래한글 왼쪽 여백 변환 공식 보정 */
 (function(global){
   "use strict";
 
@@ -222,6 +222,22 @@
     const wordParagraphLeft=
       firstLineLeft+hanging;
 
+    // 아래한글 '인터넷 문서' 가져오기 실측 결과:
+    //
+    // CSS margin-left:36pt / text-indent:-30pt
+    //   -> 한글 왼쪽 -24pt / 내어쓰기 30pt
+    //
+    // CSS margin-left:66pt / text-indent:-30pt
+    //   -> 한글 왼쪽 6pt / 내어쓰기 30pt
+    //
+    // 따라서 아래한글용 CSS margin-left는
+    //   설정 왼쪽 여백 + (내어쓰기 × 2)
+    // 로 변환한다.
+    //
+    // 이 값은 하드코딩이 아니라 사용자 스타일 값으로 매번 계산된다.
+    const hwpMarginLeft=
+      firstLineLeft+(hanging*2);
+
     const fontSizePt=
       Math.max(
         1,
@@ -239,6 +255,7 @@
       hanging,
       firstLineLeft,
       wordParagraphLeft,
+      hwpMarginLeft,
       fontSizePt,
       linePercent,
       lineRatio:linePercent/100,
@@ -279,16 +296,27 @@
     const {
       s,
       hanging,
-      wordParagraphLeft,
+      hwpMarginLeft,
       linePercent
     }=referenceMetrics(style);
 
-    // 실제 아래한글 import 결과에서
-    // margin-left:6pt + text-indent:-30pt -> 왼쪽 -24pt / 내어쓰기 30pt
-    // 로 해석되는 것이 확인되었다.
+    // 실제 아래한글 import 테스트 결과:
     //
-    // 원하는 값이 왼쪽 6pt / 내어쓰기 30pt이므로
-    // CSS paragraph margin-left는 6 + 30 = 36pt로 전달한다.
+    // A: margin-left:36pt / text-indent:-30pt
+    //    -> 왼쪽 -24pt / 내어쓰기 30pt
+    //
+    // B: margin-left:66pt / text-indent:-30pt
+    //    -> 왼쪽 6pt / 내어쓰기 30pt  (정상)
+    //
+    // 따라서 일반화한 공식:
+    //   HWP용 margin-left =
+    //     설정 왼쪽 여백 + (내어쓰기 × 2)
+    //
+    // 예:
+    //   왼쪽 6pt + 내어쓰기 30pt
+    //   -> 6 + 60 = 66pt
+    //
+    // 사용자가 값을 바꾸면 자동으로 다시 계산된다.
     //
     // 한컴이 자체적으로 생성하는 HTML과 비슷하게:
     // - p class="HStyle0"
@@ -300,7 +328,7 @@
       `margin-top:${s.spaceBeforePt}pt`,
       `margin-right:${s.rightIndentPt}pt`,
       `margin-bottom:${s.spaceAfterPt}pt`,
-      `margin-left:${wordParagraphLeft}pt`,
+      `margin-left:${hwpMarginLeft}pt`,
       `text-indent:-${hanging}pt`,
       `line-height:${linePercent}%`,
       `mso-line-height-alt:${linePercent}%`,
