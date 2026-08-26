@@ -1,4 +1,4 @@
-/* 파란 논문 v0.10.6 - PDF 연결/이동 유틸리티 */
+/* 파란 논문 v0.14.2 - PDF 연결/이동 + macOS 한글 파일명 대응 */
 (function(global){
   "use strict";
 
@@ -153,6 +153,13 @@
     }
   }
 
+  function canonicalPdfKey(value){
+    return String(value??"")
+      .replaceAll("\\","/")
+      .normalize("NFC")
+      .toLocaleLowerCase();
+  }
+
   function pdfCellCandidates(value){
     const raw=String(value??"")
       .trim()
@@ -170,22 +177,32 @@
   }
 
   function findPdfPath(pdfList,value){
+    // Windows에서 저장된 NFC 한글 파일명과
+    // macOS가 반환하는 NFD 한글 파일명을 같은 이름으로 비교한다.
     const candidates=pdfCellCandidates(value)
-      .map(v=>v.toLocaleLowerCase());
+      .map(canonicalPdfKey);
 
     if(!candidates.length)return null;
 
     for(const pdf of pdfList||[]){
-      const path=String(pdf.path||"")
-        .replaceAll("\\","/")
-        .toLocaleLowerCase();
+      const path=canonicalPdfKey(
+        pdf.path
+      );
 
-      if(candidates.includes(path))return pdf.path;
+      if(candidates.includes(path)){
+        // 실제 Mac 폴더를 scanPdfs()에서 읽어 만든 path를 반환한다.
+        return pdf.path;
+      }
     }
 
     for(const pdf of pdfList||[]){
-      const name=String(pdf.name||"").toLocaleLowerCase();
-      if(candidates.includes(name))return pdf.path;
+      const name=canonicalPdfKey(
+        pdf.name
+      );
+
+      if(candidates.includes(name)){
+        return pdf.path;
+      }
     }
 
     return null;
