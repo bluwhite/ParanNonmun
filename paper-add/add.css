@@ -14,3 +14,34 @@
 .ai-parse-button{border-color:#a78bfa;background:#faf5ff;color:#6d28d9}
 .ai-parse-button:hover{background:#f3e8ff}
 .ai-parse-button:disabled{opacity:.45}
+
+.ai-diagnostic-box{
+  margin-top:10px;
+  padding:9px 10px;
+  border:1px solid #fecaca;
+  border-radius:8px;
+  background:#fff7f7;
+  color:#7f1d1d;
+}
+.ai-diagnostic-box[hidden]{display:none}
+.ai-diagnostic-box summary{
+  cursor:pointer;
+  font-size:12px;
+  font-weight:800
+}
+.ai-diagnostic-box pre{
+  max-height:260px;
+  overflow:auto;
+  margin:9px 0;
+  padding:9px;
+  border-radius:6px;
+  background:#fff;
+  white-space:pre-wrap;
+  word-break:break-word;
+  font-size:11px;
+  line-height:1.45
+}
+.ai-diagnostic-box button{
+  padding:6px 9px;
+  font-size:11px
+}

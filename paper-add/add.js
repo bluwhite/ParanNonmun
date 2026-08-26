@@ -113,7 +113,60 @@ function enrichPublisherFromJournal(record){
   return record;
 }
 
+
+function clearAiDiagnostic(){
+  const box=$("aiDiagnosticBox");
+  const text=$("aiDiagnosticText");
+
+  if(text)text.textContent="";
+  if(box){
+    box.hidden=true;
+    box.open=false;
+  }
+}
+
+function diagnosticText(value){
+  if(!value)return "";
+
+  if(value.primary || value.fallback){
+    const parts=[];
+
+    if(value.primary){
+      parts.push(
+        "[1차 Qwen]\n"+
+        ParanAiParser.formatDiagnostic(value.primary)
+      );
+    }
+
+    if(value.fallback){
+      parts.push(
+        "[2차 Strict fallback]\n"+
+        ParanAiParser.formatDiagnostic(value.fallback)
+      );
+    }
+
+    return parts.join("\n\n");
+  }
+
+  return ParanAiParser.formatDiagnostic(value);
+}
+
+function showAiDiagnostic(value){
+  const text=diagnosticText(value);
+  const box=$("aiDiagnosticBox");
+  const pre=$("aiDiagnosticText");
+
+  if(!text || !box || !pre){
+    clearAiDiagnostic();
+    return;
+  }
+
+  pre.textContent=text;
+  box.hidden=false;
+}
+
 async function parseAi(){
+  clearAiDiagnostic();
   const text=inputText();
 
   if(!text){
@@ -167,19 +220,37 @@ async function parseAi(){
     const count=
       parsed._publisherCandidates?.length||0;
 
+    const route=parsed._aiFallback
+      ? " · Qwen JSON 실패 → Strict fallback 성공"
+      : "";
+
     if(parsed._journalMatched){
       $("parseState").textContent=
         count>1
-          ? `AI 분석 완료 · 형식: ${style} · 학회명 후보 ${count}개 중 첫 번째 적용`
-          : `AI 분석 완료 · 형식: ${style} · 학술지 정보 일치`;
+          ? `AI 분석 완료 · 형식: ${style}${route} · 학회명 후보 ${count}개 중 첫 번째 적용`
+          : `AI 분석 완료 · 형식: ${style}${route} · 학술지 정보 일치`;
     }else{
       $("parseState").textContent=
-        `AI 분석 완료 · 형식: ${style}`;
+        `AI 분석 완료 · 형식: ${style}${route}`;
+    }
+
+    if(parsed._aiFallback && parsed._aiPrimaryDiagnostic){
+      showAiDiagnostic(parsed._aiPrimaryDiagnostic);
     }
   }catch(error){
     clearPreview();
     $("parseState").textContent=
       `AI 분석 실패: ${error.message}`;
+
+    if(error?.diagnostic){
+      showAiDiagnostic(error.diagnostic);
+    }
+
+    console.error(
+      "[파란논문 AI] 최종 오류",
+      error,
+      error?.diagnostic||""
+    );
   }finally{
     button.disabled=false;
   }
@@ -302,6 +373,7 @@ async function parseMla(){
 $("risText").addEventListener("input",()=>{
   // 입력 내용이 바뀌면 이전 분석 결과를 그대로 저장하지 못하게 한다.
   clearPreview();
+  clearAiDiagnostic();
   $("parseState").textContent=
     "입력됨 · AI, RIS, APA 또는 MLA 버튼을 누르세요.";
 });
@@ -319,6 +391,7 @@ $("brCleanupBtn").onclick=()=>{
 
   textarea.value=after;
   clearPreview();
+  clearAiDiagnostic();
   $("parseState").textContent=
     "BR 태그를 줄바꿈으로 변환했습니다. AI, RIS, APA 또는 MLA 버튼을 누르세요.";
   textarea.focus();
@@ -328,6 +401,24 @@ $("aiParseBtn").onclick=parseAi;
 $("risParseBtn").onclick=parseRis;
 $("apaParseBtn").onclick=parseApa;
 $("mlaParseBtn").onclick=parseMla;
+
+$("copyAiDiagnosticBtn").onclick=async()=>{
+  const text=$("aiDiagnosticText")?.textContent||"";
+  if(!text)return;
+
+  try{
+    await navigator.clipboard.writeText(text);
+    $("copyAiDiagnosticBtn").textContent="복사됨";
+    setTimeout(()=>{
+      $("copyAiDiagnosticBtn").textContent="오류 상세 복사";
+    },1200);
+  }catch(_error){
+    alert(
+      "자동 복사에 실패했습니다. 상세 내용을 직접 선택해 복사하세요."
+    );
+  }
+};
+
 $("cancelBtn").onclick=()=>window.close();
 
 $("addBtn").onclick=async()=>{
