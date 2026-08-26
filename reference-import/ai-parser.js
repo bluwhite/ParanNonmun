@@ -10,7 +10,7 @@
 Determine the citation style automatically. It may be APA, MLA, Chicago, Harvard, Vancouver, IEEE, a Korean academic database export, or a site-specific variation.
 Extract ONLY information explicitly present in the reference. Never invent missing facts.
 Return one JSON object with exactly these fields:
-format, authors, year, title, journal, volume, issue, startPage, endPage.
+format, authors, year, title, journal, publisher, volume, issue, startPage, endPage.
 authors must be an array.
 Preserve punctuation inside English names such as "Smith, J.".
 Remove trailing citation punctuation from Korean author names such as "신희삼." -> "신희삼".
@@ -18,7 +18,15 @@ Remove trailing citation punctuation from Korean author names such as "신희삼
 "Journal Name 6.2 (2012): 27-44" means volume="6", issue="2", year="2012".
 "Journal Name, 권, 9호, 2018, 65-88" means volume="", issue="9", year="2018".
 "Journal Name, 6권, 2호, 2018, 27-44" means volume="6", issue="2", year="2018".
-If a field is absent or unclear, use an empty string. Do not return publisher/society names.
+If a field is absent or unclear, use an empty string.
+
+Distinguish journal from publisher/institution:
+- journal: the journal, periodical, proceedings, or serial title.
+- publisher: the organization or institution that published/issued the work, such as a university, research institute, government agency, academic society, or publishing company.
+- For a report, manual, guideline, institutional document, or standalone work that has no journal title, leave journal="" and put the issuing institution in publisher.
+- Example: "Hong, Q. N., ... (2018). Mixed methods appraisal tool (MMAT) version 2018. McGill University." means journal="", publisher="McGill University".
+- Do not invent a publisher that is not explicitly present.
+
 Return JSON only.`;
 
   const STRICT_SCHEMA={
@@ -30,12 +38,13 @@ Return JSON only.`;
       year:{type:"string"},
       title:{type:"string"},
       journal:{type:"string"},
+      publisher:{type:"string"},
       volume:{type:"string"},
       issue:{type:"string"},
       startPage:{type:"string"},
       endPage:{type:"string"}
     },
-    required:["format","authors","year","title","journal","volume","issue","startPage","endPage"]
+    required:["format","authors","year","title","journal","publisher","volume","issue","startPage","endPage"]
   };
 
   const clean=v=>String(v??"").normalize("NFKC").replace(/\u00a0/g," ").replace(/\s+/g," ").trim();
@@ -74,7 +83,7 @@ Return JSON only.`;
       journal:clean(data?.journal),
       volume:cleanNumber(data?.volume),
       issue:cleanNumber(data?.issue),
-      publisher:"",
+      publisher:clean(data?.publisher),
       startPage:cleanNumber(data?.startPage),
       endPage:cleanNumber(data?.endPage),
       memo:"",
