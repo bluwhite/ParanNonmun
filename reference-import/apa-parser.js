@@ -267,9 +267,15 @@
       throw new Error("APA에서 출판연도(예: 2024)를 찾지 못했습니다.");
     }
 
-    const authors=stripEdgePunctuation(
+    const rawAuthors=cleanText(
       source.slice(0,yearInfo.index)
-    );
+    ).replace(/^[\s,;:]+|[\s,;:]+$/g,"");
+
+    const authors=global.ParanAuthorUtils
+      ? global.ParanAuthorUtils.normalizeAuthors(rawAuthors)
+      : rawAuthors
+          .replace(/\s*,?\s+and\s+/gi,"·")
+          .replace(/\s*,?\s*&\s*/g,"·");
 
     const remainder=stripEdgePunctuation(
       source.slice(yearInfo.end)

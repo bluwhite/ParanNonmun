@@ -76,11 +76,15 @@ async function ensureJournalInfo(){
   if(journalInfoLoadError)throw journalInfoLoadError;
 
   try{
-    const count=await ParanApaParser.loadJournalInfo(
-      "../reference-data/journal-info.json"
-    );
+    const url="../reference-data/journal-info.json";
+
+    const [apaCount,mlaCount]=await Promise.all([
+      ParanApaParser.loadJournalInfo(url),
+      ParanMlaParser.loadJournalInfo(url)
+    ]);
+
     journalInfoReady=true;
-    console.info(`학술지 정보 ${count}개 로드 완료`);
+    console.info(`학술지 정보 ${Math.max(apaCount,mlaCount)}개 로드 완료`);
     return true;
   }catch(error){
     journalInfoLoadError=error;
@@ -155,11 +159,58 @@ async function parseApa(){
   }
 }
 
+
+async function parseMla(){
+  const text=inputText();
+
+  if(!text){
+    clearPreview();
+    $("parseState").textContent="MLA 내용을 입력하세요.";
+    return;
+  }
+
+  const button=$("mlaParseBtn");
+
+  try{
+    button.disabled=true;
+    $("parseState").textContent="MLA 분석 중...";
+
+    await ensureJournalInfo();
+
+    parsed=ParanMlaParser.parse(text);
+    fillPreview(parsed);
+    $("addBtn").disabled=!parsed.title;
+
+    if(parsed._journalMatched){
+      const count=parsed._publisherCandidates?.length||0;
+
+      if(count>1){
+        $("parseState").textContent=
+          `MLA 분석 완료 · 학술지 정보 일치 · 학회명 후보 ${count}개 중 첫 번째 적용`;
+      }else{
+        $("parseState").textContent=
+          "MLA 분석 완료 · 학술지 정보 일치";
+      }
+    }else if(parsed.journal){
+      $("parseState").textContent=
+        "MLA 분석 완료 · 학술지명은 찾았지만 학회명 정보가 없습니다.";
+    }else{
+      $("parseState").textContent=
+        "MLA 분석 완료 · 학술지명을 확인해 주세요.";
+    }
+  }catch(error){
+    clearPreview();
+    $("parseState").textContent=`MLA 분석 실패: ${error.message}`;
+  }finally{
+    button.disabled=false;
+  }
+}
+
 $("risText").addEventListener("input",()=>{
   // 입력 내용이 바뀌면 이전 분석 결과를 그대로 저장하지 못하게 한다.
   clearPreview();
   $("parseState").textContent=
-    "입력됨 · RIS 또는 APA 버튼을 누르세요.";
+    "입력됨 · RIS, APA 또는 MLA 버튼을 누르세요.";
 });
 
 $("brCleanupBtn").onclick=()=>{
@@ -176,12 +227,13 @@ $("brCleanupBtn").onclick=()=>{
   textarea.value=after;
   clearPreview();
   $("parseState").textContent=
-    "BR 태그를 줄바꿈으로 변환했습니다. RIS 또는 APA 버튼을 누르세요.";
+    "BR 태그를 줄바꿈으로 변환했습니다. RIS, APA 또는 MLA 버튼을 누르세요.";
   textarea.focus();
 };
 
 $("risParseBtn").onclick=parseRis;
 $("apaParseBtn").onclick=parseApa;
+$("mlaParseBtn").onclick=parseMla;
 $("cancelBtn").onclick=()=>window.close();
 
 $("addBtn").onclick=async()=>{
