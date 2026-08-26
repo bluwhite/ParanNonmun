@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>논문 PDF 관리 테스트</title>
+<style>
+:root{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#111827;background:#f3f4f6}
+*{box-sizing:border-box}html,body{margin:0}button,input{font:inherit}
+button{border:1px solid #d1d5db;background:#fff;border-radius:8px;padding:8px 11px;font-weight:700;cursor:pointer}
+button.primary{background:#111827;color:white;border-color:#111827}
+button.save{background:#166534;color:white;border-color:#166534}
+button.tool.active{background:#dbeafe;border-color:#93c5fd;color:#1d4ed8}
+button:disabled{opacity:.45;cursor:not-allowed}
+.version{display:inline-flex;align-items:center;padding:5px 9px;border-radius:999px;background:#111827;color:white;font-size:12px;font-weight:800;letter-spacing:.03em}
+.wrap{max-width:1120px;margin:0 auto;padding:32px 18px 60px}
+.hero{display:flex;justify-content:space-between;gap:20px;align-items:flex-start}
+.hero h1{margin:4px 0 8px;font-size:32px}.hero p{margin:0;color:#4b5563}
+.eyebrow{font-size:12px;font-weight:800;letter-spacing:.1em;color:#6b7280}
+.card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:20px;margin-top:16px}
+.card h2{font-size:18px;margin:0 0 10px}
+.buttons{display:flex;gap:8px;flex-wrap:wrap}
+.statusbox{margin-top:12px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:9px;padding:10px 12px;font-weight:650}
+.section-head{display:flex;justify-content:space-between;gap:16px;align-items:end}
+input{border:1px solid #d1d5db;border-radius:8px;padding:8px 10px}
+#searchBox{min-width:300px}
+.table-wrap{overflow:auto;border:1px solid #e5e7eb;border-radius:10px;margin-top:12px}
+table{width:100%;border-collapse:collapse;font-size:14px}th,td{padding:10px 11px;border-bottom:1px solid #e5e7eb;text-align:left}
+th{background:#f9fafb;color:#4b5563;font-size:12px}
+td.path{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:#4b5563}
+td.empty{text-align:center;color:#6b7280;padding:24px}
+.open-btn{background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8}
+.info li{line-height:1.75}
+/* Viewer */
+body.viewer-mode{height:100vh;overflow:hidden;background:#555b63}
+.topbar{height:68px;background:#fff;border-bottom:1px solid #d1d5db;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;z-index:20}
+.file-block{display:flex;align-items:center;gap:10px;min-width:260px;max-width:36%}.file-text{min-width:0}
+.filename{font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.filepath{font-size:11px;color:#6b7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.toolbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.toolbar input{width:160px}
+.subbar{height:36px;background:#f8fafc;border-bottom:1px solid #d1d5db;padding:6px 12px;display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#475569}
+.scroll-area{height:calc(100vh - 104px);overflow:auto;padding:22px 0 80px}
+.pages{display:flex;flex-direction:column;align-items:center;gap:18px}
+.page-wrap{position:relative;background:#fff;box-shadow:0 4px 18px rgba(0,0,0,.28);min-height:320px}
+.page-label{position:absolute;left:-92px;top:8px;color:white;font-size:11px;font-weight:700;opacity:.9;width:82px;text-align:right}
+.page-wrap canvas.base{display:block}.page-wrap canvas.overlay{position:absolute;left:0;top:0;cursor:crosshair}
+.loading-page{display:flex;align-items:center;justify-content:center;color:#64748b;background:white;width:780px;height:980px}
+.dirty{position:fixed;right:16px;bottom:16px;background:#92400e;color:white;padding:9px 12px;border-radius:999px;font-weight:700;font-size:12px;z-index:30}
+.hidden{display:none}
+@media(max-width:900px){.hero,.section-head{display:block}.topbar{height:auto;min-height:68px;align-items:flex-start}.file-block{max-width:30%}.scroll-area{height:calc(100vh - 138px)}#searchBox{width:100%;margin-top:12px}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+const APP_VERSION = "0.5.0";
+const params = new URLSearchParams(location.search);
+const VIEWER_MODE = params.get("mode")==="viewer";
+
+// ---------- Shared file-system helpers ----------
+const DB_NAME='paper-pdf-singlefile-db';
+const STORE='handles';
+function openDb(){
+  return new Promise((resolve,reject)=>{
+    const r=indexedDB.open(DB_NAME,1);
+    r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains(STORE))r.result.createObjectStore(STORE)};
+    r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);
+  });
+}
+async function saveRootHandle(h){
+  const db=await openDb();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).put(h,'root');
+    tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);
+  });
+}
+async function loadRootHandle(){
+  const db=await openDb();
+  return new Promise((resolve,reject)=>{
+    const r=db.transaction(STORE,'readonly').objectStore(STORE).get('root');
+    r.onsuccess=()=>resolve(r.result||null);r.onerror=()=>reject(r.error);
+  });
+}
+async function ensurePermission(h,mode='readwrite',mayPrompt=true){
+  const opt={mode};
+  if(await h.queryPermission(opt)==='granted')return true;
+  if(!mayPrompt)return false;
+  return await h.requestPermission(opt)==='granted';
+}
+async function resolveFile(root,path){
+  const parts=path.replaceAll('\\','/').split('/').filter(Boolean);
+  let dir=root;
+  for(let i=0;i<parts.length-1;i++)dir=await dir.getDirectoryHandle(parts[i]);
+  const fileName=parts[parts.length-1];
+  return {fileHandle:await dir.getFileHandle(fileName),parentHandle:dir,fileName};
+}
+
+function loadScript(src){
+  return new Promise((resolve,reject)=>{
+    const s=document.createElement('script');s.src=src;s.onload=resolve;s.onerror=reject;document.head.appendChild(s);
+  });
+}
+
+// ---------- Main ----------
+async function runMain(){
+  document.title=`논문 PDF 관리 테스트 v${APP_VERSION}`;
+  document.getElementById('app').innerHTML=`
+  <main class="wrap">
+    <header class="hero">
+      <div>
+        <div class="eyebrow">GitHub Pages · Chrome / Edge</div>
+        <h1>논문 PDF 관리 테스트</h1>
+        <p>로컬 폴더의 PDF를 연속 스크롤 방식으로 읽고 표준 PDF 주석으로 저장합니다.</p>
+      </div>
+      <span class="version">v${APP_VERSION}</span>
+    </header>
+    <section class="card">
+      <h2>1. 논문 폴더 연결</h2>
+      <div class="buttons">
+        <button id="chooseBtn" class="primary">논문 폴더 선택</button>
+        <button id="reopenBtn">이전 폴더 다시 열기</button>
+        <button id="scanBtn" disabled>PDF 다시 검색</button>
+      </div>
+      <div id="status" class="statusbox">아직 폴더를 선택하지 않았습니다.</div>
+    </section>
+    <section class="card">
+      <div class="section-head">
+        <div><h2>2. PDF 목록</h2><div id="countText">PDF 0개</div></div>
+        <input id="searchBox" type="search" placeholder="파일명 또는 상대경로 검색">
+      </div>
+      <div class="table-wrap">
+        <table><thead><tr><th>파일명</th><th>상대경로</th><th>크기</th><th></th></tr></thead>
+        <tbody id="pdfBody"><tr><td colspan="4" class="empty">논문 폴더를 선택하세요.</td></tr></tbody></table>
+      </div>
+    </section>
+    <section class="card info">
+      <h2>현재 테스트 버전 v${APP_VERSION}</h2>
+      <ul>
+        <li>PDF 세로 연속 스크롤</li>
+        <li>표준 PDF Highlight 주석</li>
+        <li>표준 PDF Text 메모</li>
+        <li>원본에 저장 / 복사본 저장</li>
+      </ul>
+    </section>
+  </main>`;
+
+  let rootHandle=null,pdfs=[];
+  const $=id=>document.getElementById(id),status=$('status'),body=$('pdfBody'),count=$('countText');
+  const fmt=n=>n<1024?n+' B':n<1048576?(n/1024).toFixed(1)+' KB':(n/1048576).toFixed(1)+' MB';
+  async function walk(dir,prefix=''){
+    const out=[];
+    for await(const [name,h] of dir.entries()){
+      const path=prefix?`${prefix}/${name}`:name;
+      if(h.kind==='directory')out.push(...await walk(h,path));
+      else if(h.kind==='file'&&name.toLowerCase().endsWith('.pdf')){
+        const f=await h.getFile();out.push({name,path,size:f.size});
+      }
+    }
+    return out;
+  }
+  async function scan(prompt=true){
+    if(!rootHandle)return;
+    if(!await ensurePermission(rootHandle,'readwrite',prompt)){status.textContent='폴더 읽기/쓰기 권한이 필요합니다.';return}
+    status.textContent=`"${rootHandle.name}" 검색 중...`;
+    pdfs=await walk(rootHandle);pdfs.sort((a,b)=>a.path.localeCompare(b.path,'ko'));
+    $('scanBtn').disabled=false;render();status.textContent=`PDF ${pdfs.length}개를 찾았습니다.`;
+  }
+  function render(){
+    const q=$('searchBox').value.trim().toLowerCase();
+    const arr=pdfs.filter(x=>x.name.toLowerCase().includes(q)||x.path.toLowerCase().includes(q));
+    count.textContent=`PDF ${arr.length}개`;body.replaceChildren();
+    if(!arr.length){
+      const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=4;td.className='empty';td.textContent='PDF가 없습니다.';tr.append(td);body.append(tr);return;
+    }
+    for(const x of arr){
+      const tr=document.createElement('tr');
+      const a=document.createElement('td');a.textContent=x.name;
+      const b=document.createElement('td');b.textContent=x.path;b.className='path';
+      const c=document.createElement('td');c.textContent=fmt(x.size);
+      const d=document.createElement('td'),btn=document.createElement('button');btn.className='open-btn';btn.textContent='연속 스크롤로 열기';
+      btn.onclick=()=>{const u=new URL(location.href);u.search='';u.searchParams.set('mode','viewer');u.searchParams.set('file',x.path);window.open(u.toString(),'_blank')};
+      d.append(btn);tr.append(a,b,c,d);body.append(tr);
+    }
+  }
+  $('searchBox').oninput=render;
+  $('chooseBtn').onclick=async()=>{
+    try{
+      rootHandle=await showDirectoryPicker({id:'paper-library-root',mode:'readwrite'});
+      await saveRootHandle(rootHandle);await scan(true);
+    }catch(e){if(e.name!=='AbortError')alert(e.message)}
+  };
+  $('reopenBtn').onclick=async()=>{rootHandle=await loadRootHandle();if(!rootHandle)return alert('저장된 폴더가 없습니다.');await scan(true)};
+  $('scanBtn').onclick=()=>scan(true);
+  const saved=await loadRootHandle();
+  if(saved){rootHandle=saved;if(await ensurePermission(saved,'readwrite',false))await scan(false);else status.textContent=`이전에 선택한 폴더 "${saved.name}"가 저장되어 있습니다.`}
+}
+
+// ---------- Viewer ----------
+async function runViewer(){
+  document.body.classList.add('viewer-mode');
+  await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js');
+  await loadScript('https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js');
+  pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+  document.getElementById('app').innerHTML=`
+  <header class="topbar">
+    <div class="file-block">
+      <button id="closeBtn">← 목록</button>
+      <div class="file-text">
+        <div id="fileName" class="filename">PDF 불러오는 중...</div>
+        <div id="filePath" class="filepath"></div>
+      </div>
+      <span class="version">v${APP_VERSION}</span>
+    </div>
+    <div class="toolbar">
+      <button id="highlightBtn" class="tool active">형광펜</button>
+      <button id="noteBtn" class="tool">메모</button>
+      <input id="noteText" type="text" placeholder="메모 내용">
+      <button id="undoBtn">실행 취소</button>
+      <button id="zoomOutBtn">−</button><span id="zoomText">125%</span><button id="zoomInBtn">＋</button>
+      <button id="saveCopyBtn">복사본 저장</button>
+      <button id="saveBtn" class="save">원본에 저장</button>
+    </div>
+  </header>
+  <div class="subbar"><span id="viewerStatus">준비 중...</span><span id="pageIndicator">페이지 - / - · v${APP_VERSION}</span></div>
+  <main id="scrollArea" class="scroll-area"><div id="pages" class="pages"></div></main>
+  <div id="dirtyBadge" class="dirty hidden">저장되지 않은 변경 사항</div>`;
+
+  let rootHandle,fileHandle,parentHandle,fileName,relativePath,originalBytes,pdfDoc;
+  let zoom=1.25,tool='highlight',dirty=false,history=[];
+  const pending={},rendered=new Map();
+  const $=id=>document.getElementById(id),pagesEl=$('pages'),scrollArea=$('scrollArea');
+  const status=$('viewerStatus'),dirtyBadge=$('dirtyBadge');
+  const setDirty=v=>{dirty=v;dirtyBadge.classList.toggle('hidden',!v)};
+  function setTool(t){tool=t;$('highlightBtn').classList.toggle('active',t==='highlight');$('noteBtn').classList.toggle('active',t==='note');for(const x of rendered.values())x.overlay.style.cursor=t==='highlight'?'crosshair':'copy'}
+  $('highlightBtn').onclick=()=>setTool('highlight');$('noteBtn').onclick=()=>setTool('note');
+
+  function canvasPoint(canvas,e){const r=canvas.getBoundingClientRect();return{x:(e.clientX-r.left)*(canvas.width/r.width),y:(e.clientY-r.top)*(canvas.height/r.height)}}
+  function canvasToPdf(canvas,p){return{x:p.x/zoom,y:(canvas.height-p.y)/zoom}}
+  function pdfRectToCanvas(a,h){return{x:a.x*zoom,y:h-(a.y+a.h)*zoom,w:a.w*zoom,h:a.h*zoom}}
+  function drawNote(ctx,x,y){
+    ctx.save();ctx.fillStyle='#facc15';ctx.strokeStyle='#a16207';ctx.lineWidth=2;ctx.beginPath();ctx.arc(x+10,y+10,9,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.fillStyle='#713f12';ctx.font='bold 12px sans-serif';ctx.fillText('!',x+7,y+14);ctx.restore();
+  }
+  async function redraw(n){
+    const d=rendered.get(n);if(!d)return;
+    const ctx=d.overlay.getContext('2d');ctx.clearRect(0,0,d.overlay.width,d.overlay.height);
+    try{
+      const anns=await d.page.getAnnotations({intent:'display'});
+      for(const a of anns){
+        if(!a.rect)continue;
+        const x=Math.min(a.rect[0],a.rect[2]),y=Math.min(a.rect[1],a.rect[3]),w=Math.abs(a.rect[2]-a.rect[0]),h=Math.abs(a.rect[3]-a.rect[1]);
+        const r=pdfRectToCanvas({x,y,w,h},d.overlay.height);
+        if(a.annotationType===9){ctx.save();ctx.fillStyle='rgba(255,235,59,.34)';ctx.fillRect(r.x,r.y,r.w,r.h);ctx.restore()}
+        else if(a.annotationType===1)drawNote(ctx,r.x,r.y);
+      }
+    }catch(e){}
+    for(const a of (pending[n]||[])){
+      const r=pdfRectToCanvas(a,d.overlay.height);
+      if(a.type==='highlight'){ctx.save();ctx.fillStyle='rgba(255,235,59,.38)';ctx.fillRect(r.x,r.y,r.w,r.h);ctx.restore()}
+      else drawNote(ctx,r.x,r.y);
+    }
+  }
+  function addPending(n,a){if(!pending[n])pending[n]=[];pending[n].push(a);history.push({page:n});setDirty(true);redraw(n)}
+  function attach(n,overlay){
+    let start=null,now=null;
+    overlay.onpointerdown=e=>{if(tool!=='highlight')return;start=canvasPoint(overlay,e);now=start;overlay.setPointerCapture(e.pointerId)};
+    overlay.onpointermove=e=>{if(tool!=='highlight'||!start)return;now=canvasPoint(overlay,e);redraw(n).then(()=>{const ctx=overlay.getContext('2d'),x=Math.min(start.x,now.x),y=Math.min(start.y,now.y),w=Math.abs(now.x-start.x),h=Math.abs(now.y-start.y);ctx.save();ctx.fillStyle='rgba(255,235,59,.25)';ctx.strokeStyle='#ca8a04';ctx.fillRect(x,y,w,h);ctx.strokeRect(x,y,w,h);ctx.restore()})};
+    overlay.onpointerup=e=>{if(tool!=='highlight'||!start)return;now=canvasPoint(overlay,e);const x1=Math.min(start.x,now.x),x2=Math.max(start.x,now.x),y1=Math.min(start.y,now.y),y2=Math.max(start.y,now.y);if(x2-x1>5&&y2-y1>5){const bl=canvasToPdf(overlay,{x:x1,y:y2}),tr=canvasToPdf(overlay,{x:x2,y:y1});addPending(n,{type:'highlight',x:bl.x,y:bl.y,w:tr.x-bl.x,h:tr.y-bl.y,text:''})}start=null;now=null};
+    overlay.onclick=e=>{if(tool!=='note')return;const text=$('noteText').value.trim();if(!text)return alert('메모 내용을 먼저 입력하세요.');const p=canvasToPdf(overlay,canvasPoint(overlay,e));addPending(n,{type:'text',x:p.x,y:p.y,w:20/zoom,h:20/zoom,text})};
+  }
+  async function renderPage(n,wrap){
+    if(rendered.has(n))return;
+    const page=await pdfDoc.getPage(n),viewport=page.getViewport({scale:zoom});
+    wrap.innerHTML='';
+    const label=document.createElement('div');label.className='page-label';label.textContent=`p.${n} · v${APP_VERSION}`;
+    const base=document.createElement('canvas');base.className='base';base.width=Math.floor(viewport.width);base.height=Math.floor(viewport.height);
+    const overlay=document.createElement('canvas');overlay.className='overlay';overlay.width=base.width;overlay.height=base.height;
+    wrap.style.width=base.width+'px';wrap.style.height=base.height+'px';wrap.append(label,base,overlay);
+    rendered.set(n,{wrap,base,overlay,page});attach(n,overlay);
+    await page.render({canvasContext:base.getContext('2d'),viewport}).promise;await redraw(n);
+  }
+  function makeSlots(){
+    pagesEl.innerHTML='';rendered.clear();
+    for(let i=1;i<=pdfDoc.numPages;i++){const w=document.createElement('div');w.className='page-wrap';w.dataset.page=i;const ph=document.createElement('div');ph.className='loading-page';ph.textContent=`${i}페이지`;w.append(ph);pagesEl.append(w)}
+    const io=new IntersectionObserver(es=>{for(const e of es)if(e.isIntersecting)renderPage(Number(e.target.dataset.page),e.target)},{root:scrollArea,rootMargin:'900px 0px'});
+    document.querySelectorAll('.page-wrap').forEach(x=>io.observe(x));
+  }
+  scrollArea.onscroll=()=>{
+    const top=scrollArea.getBoundingClientRect().top;let best=1,dist=Infinity;
+    document.querySelectorAll('.page-wrap').forEach(el=>{const d=Math.abs(el.getBoundingClientRect().top-top-10);if(d<dist){dist=d;best=Number(el.dataset.page)}});
+    $('pageIndicator').textContent=`페이지 ${best} / ${pdfDoc.numPages} · v${APP_VERSION}`;
+  };
+  $('undoBtn').onclick=()=>{const h=history.pop();if(!h)return;(pending[h.page]||[]).pop();setDirty(history.length>0);redraw(h.page)};
+  async function rerender(){const s=scrollArea.scrollTop;makeSlots();scrollArea.scrollTop=s}
+  $('zoomOutBtn').onclick=async()=>{zoom=Math.max(.7,zoom-.15);$('zoomText').textContent=Math.round(zoom*100)+'%';await rerender()};
+  $('zoomInBtn').onclick=async()=>{zoom=Math.min(2.4,zoom+.15);$('zoomText').textContent=Math.round(zoom*100)+'%';await rerender()};
+
+  function ensureAnnotsArray(doc,page){
+    const {PDFName,PDFArray}=PDFLib,key=PDFName.of('Annots');
+    let arr=page.node.lookupMaybe(key,PDFArray);
+    if(!arr){arr=doc.context.obj([]);page.node.set(key,arr)}
+    return arr;
+  }
+  function addHighlight(doc,page,a){
+    const {PDFName,PDFNumber,PDFHexString}=PDFLib,x1=a.x,y1=a.y,x2=a.x+a.w,y2=a.y+a.h;
+    const dict=doc.context.obj({
+      Type:PDFName.of('Annot'),Subtype:PDFName.of('Highlight'),
+      Rect:doc.context.obj([x1,y1,x2,y2]),
+      QuadPoints:doc.context.obj([x1,y2,x2,y2,x1,y1,x2,y1]),
+      C:doc.context.obj([1,.92,.18]),CA:PDFNumber.of(.35),
+      Contents:PDFHexString.fromText(a.text||''),F:PDFNumber.of(4)
+    });
+    ensureAnnotsArray(doc,page).push(doc.context.register(dict));
+  }
+  function addText(doc,page,a){
+    const {PDFName,PDFNumber,PDFHexString}=PDFLib,s=22;
+    const dict=doc.context.obj({
+      Type:PDFName.of('Annot'),Subtype:PDFName.of('Text'),
+      Rect:doc.context.obj([a.x,a.y,a.x+s,a.y+s]),
+      Contents:PDFHexString.fromText(a.text||''),
+      Name:PDFName.of('Comment'),C:doc.context.obj([1,.82,0]),F:PDFNumber.of(4)
+    });
+    ensureAnnotsArray(doc,page).push(doc.context.register(dict));
+  }
+  async function buildPdf(){
+    const doc=await PDFLib.PDFDocument.load(originalBytes.slice()),ps=doc.getPages();
+    for(const [k,list] of Object.entries(pending)){const page=ps[Number(k)-1];if(!page)continue;for(const a of list)a.type==='highlight'?addHighlight(doc,page,a):addText(doc,page,a)}
+    return new Uint8Array(await doc.save());
+  }
+  async function reload(bytes){
+    originalBytes=bytes;pdfDoc=await pdfjsLib.getDocument({data:bytes.slice()}).promise;
+    for(const k of Object.keys(pending))delete pending[k];history=[];setDirty(false);makeSlots();
+  }
+  $('saveBtn').onclick=async()=>{
+    try{
+      $('saveBtn').disabled=true;status.textContent='원본에 저장 중...';
+      if(!await ensurePermission(rootHandle,'readwrite',true))throw new Error('쓰기 권한이 없습니다.');
+      const bytes=dirty?await buildPdf():originalBytes,w=await fileHandle.createWritable();await w.write(bytes);await w.close();await reload(bytes);status.textContent=`저장 완료 · v${APP_VERSION}`;
+    }catch(e){alert('저장 실패: '+e.message)}finally{$('saveBtn').disabled=false}
+  };
+  $('saveCopyBtn').onclick=async()=>{
+    try{
+      $('saveCopyBtn').disabled=true;
+      const bytes=dirty?await buildPdf():originalBytes,stem=fileName.toLowerCase().endsWith('.pdf')?fileName.slice(0,-4):fileName;
+      let name=`${stem}_annotated.pdf`,n=2;
+      while(true){try{await parentHandle.getFileHandle(name);name=`${stem}_annotated_${n++}.pdf`}catch(e){if(e.name==='NotFoundError')break;throw e}}
+      const h=await parentHandle.getFileHandle(name,{create:true}),w=await h.createWritable();await w.write(bytes);await w.close();status.textContent=`복사본 저장 완료: ${name}`;
+    }catch(e){alert('복사본 저장 실패: '+e.message)}finally{$('saveCopyBtn').disabled=false}
+  };
+  $('closeBtn').onclick=()=>{if(dirty&&!confirm('저장되지 않은 변경 사항이 있습니다. 닫을까요?'))return;window.close()};
+  window.onbeforeunload=e=>{if(dirty){e.preventDefault();e.returnValue=''}};
+
+  relativePath=params.get('file')||'';
+  if(!relativePath)return alert('PDF 경로가 없습니다.');
+  rootHandle=await loadRootHandle();if(!rootHandle)return alert('논문 폴더가 연결되지 않았습니다.');
+  const r=await resolveFile(rootHandle,relativePath);fileHandle=r.fileHandle;parentHandle=r.parentHandle;fileName=r.fileName;
+  $('fileName').textContent=fileName;$('filePath').textContent=relativePath;document.title=`${fileName} · v${APP_VERSION}`;
+  const f=await fileHandle.getFile();originalBytes=new Uint8Array(await f.arrayBuffer());
+  pdfDoc=await pdfjsLib.getDocument({data:originalBytes.slice()}).promise;
+  $('pageIndicator').textContent=`페이지 1 / ${pdfDoc.numPages} · v${APP_VERSION}`;makeSlots();status.textContent=`준비 완료 · v${APP_VERSION}`;
+}
+
+(VIEWER_MODE ? runViewer() : runMain()).catch(e=>{console.error(e);alert(e.message)});
+</script>
+</body>
+</html>
