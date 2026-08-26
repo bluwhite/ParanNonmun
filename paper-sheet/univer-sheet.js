@@ -897,6 +897,19 @@
     };
   }
 
+
+  function setReferenceFormats(formats){
+    if(!currentData)return [];
+
+    currentData={
+      ...currentData,
+      referenceFormats:
+        global.ParanPaperData.normalizeReferenceFormats(formats)
+    };
+
+    return currentData.referenceFormats;
+  }
+
   async function flush(){
     clearTimeout(syncTimer);
     const workbook=getActiveWorkbook();
@@ -929,6 +942,7 @@
     findNext,
     getColumnHeaders,
     appendImportedRows,
+    setReferenceFormats,
     getSelectedRowContext,
     setSystemFieldAtRow,
     getData

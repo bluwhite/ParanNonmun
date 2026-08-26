@@ -26,7 +26,7 @@ async function walk(dir,prefix=""){
 function setFolderReady(ready){
   for(const id of [
     "noteSearchBtn","addPaperBtn","paperFindBtn","aiSettingsBtn",
-    "pdfLinkBtn","pdfOpenBtn","excelImportBtn"
+    "pdfLinkBtn","pdfOpenBtn","excelImportBtn","referenceFormatBtn"
   ]){
     const el=$(id);
     if(el)el.disabled=!ready;
@@ -105,6 +105,64 @@ async function findInSheet(){
   if(!query.trim())return;
   const found=await ParanPaperSheet.findNext(query);
   if(!found)alert(`"${query.trim()}"을(를) 찾지 못했습니다.`);
+}
+
+
+
+async function saveReferenceFormats(formats){
+  if(!dataStore || !rootHandle){
+    throw new Error("먼저 논문 폴더를 선택하세요.");
+  }
+
+  // 시트의 최신 편집 내용을 먼저 파란논문.json에 반영한다.
+  const synced=await ParanPaperSheet.flush();
+  if(synced)paperData=synced;
+
+  paperData={
+    ...paperData,
+    referenceFormats:
+      ParanPaperData.normalizeReferenceFormats(formats)
+  };
+
+  await dataStore.save(paperData);
+  paperData=dataStore.data;
+
+  // 이후 시트 셀 편집 저장이 일어나도 referenceFormats가 사라지지 않도록
+  // Univer 모듈 내부 currentData도 같은 값으로 갱신한다.
+  ParanPaperSheet.setReferenceFormats(
+    paperData.referenceFormats
+  );
+
+  setSaveState(
+    `참고문헌 형식 저장됨 · ${paperData.referenceFormats.length}개`,
+    "saved"
+  );
+
+  return paperData.referenceFormats;
+}
+
+async function openReferenceFormatManager(){
+  if(!rootHandle || !dataStore){
+    alert("먼저 논문 폴더를 선택하세요.");
+    return;
+  }
+
+  try{
+    // 형식 관리 창을 띄우기 전에 현재 시트를 먼저 동기화한다.
+    const synced=await ParanPaperSheet.flush();
+    if(synced)paperData=synced;
+
+    ParanReferenceFormatManager.open({
+      formats:paperData.referenceFormats,
+      onSave:saveReferenceFormats
+    });
+  }catch(error){
+    console.error(error);
+    const message=
+      `참고문헌 형식 관리 오류: ${error.message}`;
+    setSaveState(message,"error");
+    alert(message);
+  }
 }
 
 
@@ -692,6 +750,7 @@ $("addPaperBtn").onclick=async()=>{
 
 
 $("excelImportBtn").onclick=importExcelReferences;
+$("referenceFormatBtn").onclick=openReferenceFormatManager;
 
 $("aiSettingsBtn").onclick=openAiSettings;
 

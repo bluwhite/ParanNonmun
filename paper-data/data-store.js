@@ -3,7 +3,7 @@
   "use strict";
 
   const DATA_FILE_NAME = "파란논문.json";
-  const SCHEMA_VERSION = 3;
+  const SCHEMA_VERSION = 4;
   const MANAGED_SHEET_ID = "paran-paper-list";
 
   const SYSTEM_COLUMNS = [
@@ -22,6 +22,139 @@
   ];
 
   const PAPER_FIELDS = SYSTEM_COLUMNS.map(c=>c.field);
+
+
+  const REFERENCE_FORMAT_TOKENS = [
+    {token:"AU",label:"저자"},
+    {token:"PY",label:"출판연도"},
+    {token:"TI",label:"논문명"},
+    {token:"JO",label:"학술지명"},
+    {token:"VL",label:"권"},
+    {token:"IS",label:"호"},
+    {token:"PB",label:"학회명/발행기관"},
+    {token:"SP",label:"시작페이지"},
+    {token:"EP",label:"끝페이지"},
+    {token:"VL+IS",label:"권·호(국내식)"},
+    {token:"VL(IS)",label:"권(호)"}
+  ];
+
+  const REFERENCE_FORMAT_TOKEN_SET =
+    new Set(REFERENCE_FORMAT_TOKENS.map(item=>item.token));
+
+  const DEFAULT_REFERENCE_FORMATS = [
+    {
+      id:"journal-ko",
+      name:"학회지_국내",
+      template:"AU(PY), 「TI」, 『JO』 VL+IS, PB, pp.SP-EP.",
+      italicTokens:[]
+    },
+    {
+      id:"thesis-ko",
+      name:"학위_국내",
+      template:"AU(PY), 「TI」, JO.",
+      italicTokens:[]
+    },
+    {
+      id:"book-ko",
+      name:"단행본_국내",
+      template:"AU(PY), 「TI」, JO.",
+      italicTokens:[]
+    },
+    {
+      id:"journal-en",
+      name:"학회지_해외",
+      template:"AU(PY), TI, JO VL+IS, SP-EP.",
+      italicTokens:["JO"]
+    },
+    {
+      id:"thesis-en",
+      name:"학위_해외",
+      template:"AU(PY), TI, JO.",
+      italicTokens:["TI"]
+    },
+    {
+      id:"book-en",
+      name:"단행본_해외",
+      template:"AU(PY), TI, JO.",
+      italicTokens:["TI"]
+    }
+  ];
+
+  function cloneDefaultReferenceFormats(){
+    return DEFAULT_REFERENCE_FORMATS.map(format=>({
+      ...format,
+      italicTokens:[...format.italicTokens]
+    }));
+  }
+
+  function normalizeReferenceFormatName(name){
+    return String(name??"")
+      .normalize("NFKC")
+      .trim()
+      .toLocaleLowerCase();
+  }
+
+  function normalizeReferenceFormat(raw={}){
+    const id=String(raw.id||"").trim() || newId("ref-format");
+    const name=String(raw.name||"").normalize("NFKC").trim();
+    const template=String(raw.template||"")
+      .replace(/\r\n?/g,"\n")
+      .trim();
+
+    const italicTokens=[];
+    const seen=new Set();
+
+    for(const token of Array.isArray(raw.italicTokens) ? raw.italicTokens : []){
+      const clean=String(token||"").trim();
+
+      if(
+        REFERENCE_FORMAT_TOKEN_SET.has(clean) &&
+        !seen.has(clean)
+      ){
+        italicTokens.push(clean);
+        seen.add(clean);
+      }
+    }
+
+    return {
+      id,
+      name,
+      template,
+      italicTokens
+    };
+  }
+
+  function normalizeReferenceFormats(formats){
+    if(!Array.isArray(formats))return cloneDefaultReferenceFormats();
+
+    const result=[];
+    const usedIds=new Set();
+    const usedNames=new Set();
+
+    for(const raw of formats){
+      const format=normalizeReferenceFormat(raw);
+
+      if(!format.name || !format.template)continue;
+
+      let id=format.id;
+      while(usedIds.has(id)){
+        id=newId("ref-format");
+      }
+
+      const nameKey=normalizeReferenceFormatName(format.name);
+      if(!nameKey || usedNames.has(nameKey))continue;
+
+      result.push({
+        ...format,
+        id
+      });
+
+      usedIds.add(id);
+      usedNames.add(nameKey);
+    }
+
+    return result;
+  }
 
   function newId(prefix="paper"){
     if(global.crypto && typeof global.crypto.randomUUID === "function"){
@@ -116,7 +249,8 @@
       updatedAt:new Date().toISOString(),
       columns:cloneSystemColumns(),
       papers:[],
-      sheetSnapshot:null
+      sheetSnapshot:null,
+      referenceFormats:cloneDefaultReferenceFormats()
     };
   }
 
@@ -132,6 +266,11 @@
       normalized.sheetSnapshot=(data.sheetSnapshot && typeof data.sheetSnapshot==="object")
         ? data.sheetSnapshot
         : null;
+
+      if(Object.prototype.hasOwnProperty.call(data,"referenceFormats")){
+        normalized.referenceFormats=
+          normalizeReferenceFormats(data.referenceFormats);
+      }
     }
 
     return normalized;
@@ -295,6 +434,12 @@
     normalizeColumnName,
     createCustomColumn,
     hasDuplicateColumnName,
+    REFERENCE_FORMAT_TOKENS,
+    DEFAULT_REFERENCE_FORMATS,
+    cloneDefaultReferenceFormats,
+    normalizeReferenceFormat,
+    normalizeReferenceFormats,
+    normalizeReferenceFormatName,
     cellText,
     findManagedSheet
   };
