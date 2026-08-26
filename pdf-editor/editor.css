@@ -1,0 +1,54 @@
+ :root{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#111827;background:#555b63}*{box-sizing:border-box}html,body{height:100%;margin:0}body{overflow:hidden}button,input{font:inherit}button{border:1px solid #d1d5db;background:#fff;border-radius:7px;padding:7px 10px;font-weight:700;cursor:pointer}button.primary{background:#111827;color:#fff;border-color:#111827}button.save{background:#166534;color:#fff;border-color:#166534}button.tool.active{background:#dbeafe;border-color:#93c5fd;color:#1d4ed8}.topbar{min-height:68px;background:#fff;border-bottom:1px solid #d1d5db;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px}.file-block{display:flex;align-items:center;gap:10px;min-width:260px;max-width:40%}.file-text{min-width:0}.filename{font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.filepath{font-size:11px;color:#6b7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}.version{padding:5px 8px;border-radius:999px;background:#111827;color:#fff;font-size:11px;font-weight:800}.mode-label{padding:5px 8px;border-radius:999px;font-size:11px;font-weight:800}.mode-label.read{background:#e2e8f0;color:#334155}.mode-label.edit{background:#fee2e2;color:#991b1b}.toolbar,.edit-tools{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end}.toolbar input{width:180px;border:1px solid #d1d5db;border-radius:7px;padding:7px 9px}.subbar{height:36px;background:#f8fafc;border-bottom:1px solid #d1d5db;padding:6px 12px;display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#475569}.scroll-area{height:calc(100vh - 104px);overflow:auto;padding:22px 0 80px}.pages{display:flex;flex-direction:column;align-items:center;gap:18px}.page-wrap{position:relative;background:#fff;box-shadow:0 4px 18px rgba(0,0,0,.28);min-height:320px}.page-label{position:absolute;left:-82px;top:8px;width:72px;text-align:right;color:#fff;font-size:11px;font-weight:700;opacity:.9}.page-wrap canvas.base{display:block}.page-wrap canvas.overlay{position:absolute;left:0;top:0}.loading-page{display:flex;align-items:center;justify-content:center;color:#64748b;background:#fff;width:780px;height:980px}.dirty{position:fixed;right:16px;bottom:16px;background:#92400e;color:#fff;padding:9px 12px;border-radius:999px;font-weight:700;font-size:12px}.hidden{display:none!important}@media(max-width:1050px){.topbar{align-items:flex-start}.file-block{max-width:32%}.scroll-area{height:calc(100vh - 138px)}}
+
+
+/* v0.10.7 - PDF.js selectable text layer */
+.page-wrap canvas.base{
+  position:relative;
+  z-index:1;
+}
+.page-wrap .textLayer{
+  position:absolute;
+  left:0;
+  top:0;
+  right:0;
+  bottom:0;
+  z-index:2;
+  overflow:hidden;
+  opacity:1;
+  line-height:1;
+  text-size-adjust:none;
+  -webkit-text-size-adjust:none;
+  forced-color-adjust:none;
+  transform-origin:0 0;
+  user-select:text;
+  -webkit-user-select:text;
+  touch-action:auto;
+}
+.page-wrap .textLayer span,
+.page-wrap .textLayer br{
+  color:transparent;
+  position:absolute;
+  white-space:pre;
+  cursor:text;
+  transform-origin:0% 0%;
+  margin:0;
+  padding:0;
+}
+.page-wrap .textLayer span.markedContent{
+  top:0;
+  height:0;
+}
+.page-wrap .textLayer ::selection{
+  background:rgba(37,99,235,.28);
+}
+.page-wrap .textLayer ::-moz-selection{
+  background:rgba(37,99,235,.28);
+}
+.page-wrap .textLayer.selection-disabled{
+  pointer-events:none!important;
+  user-select:none!important;
+  -webkit-user-select:none!important;
+}
+.page-wrap canvas.overlay{
+  z-index:3;
+}
