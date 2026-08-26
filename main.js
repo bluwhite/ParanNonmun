@@ -130,7 +130,10 @@ async function importExcelReferences(){
     );
 
     const parsed=
-      await ParanExcelImport.pickAndParse(headers);
+      await ParanExcelImport.pickAndParse(
+        headers,
+        rootHandle
+      );
 
     if(!parsed){
       setSaveState("저장됨","saved");

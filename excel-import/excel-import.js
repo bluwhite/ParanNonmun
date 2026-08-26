@@ -233,14 +233,22 @@
     });
   }
 
-  async function pickExcelFile(){
+  async function pickExcelFile(startInHandle=null){
     if(typeof global.showOpenFilePicker==="function"){
-      const handles=await global.showOpenFilePicker({
+      const options={
         id:"paran-paper-excel-import",
         multiple:false,
         types:EXCEL_TYPES,
         excludeAcceptAllOption:false
-      });
+      };
+
+      // 논문 작업 폴더가 이미 연결되어 있으면
+      // Excel 파일 선택창을 그 폴더에서 시작한다.
+      if(startInHandle){
+        options.startIn=startInHandle;
+      }
+
+      const handles=await global.showOpenFilePicker(options);
 
       const handle=handles?.[0];
       if(!handle)return null;
@@ -255,8 +263,8 @@
     return file ? {file,handle:null} : null;
   }
 
-  async function pickAndParse(currentHeaders){
-    const picked=await pickExcelFile();
+  async function pickAndParse(currentHeaders,startInHandle=null){
+    const picked=await pickExcelFile(startInHandle);
 
     if(!picked)return null;
 
