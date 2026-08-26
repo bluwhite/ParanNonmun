@@ -1,4 +1,4 @@
-const APP_VERSION = "0.12.4";
+const APP_VERSION = "0.13.0";
 
 const DB_NAME='paper-pdf-singlefile-db';
 const STORE='handles';

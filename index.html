@@ -103,14 +103,25 @@
       <span><code>학회지_국내</code> · <code>학위_국내</code> · <code>단행본_국내</code> · <code>학회지_해외</code> · <code>학위_해외</code> · <code>단행본_해외</code> = 해당 형식 직접 적용</span>
     </div>
 
+    <div class="hwp-paste-alert" role="note">
+      <div class="hwp-paste-alert-title">아래한글에 붙여넣을 때 중요</div>
+      <div class="hwp-paste-alert-main">
+        일반 <kbd>Ctrl</kbd>+<kbd>V</kbd>가 아니라
+        <strong><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>V</kbd></strong>를 누른 뒤
+        <strong>「인터넷 문서」</strong>를 선택하세요.
+      </div>
+      <div class="hwp-paste-alert-sub">
+        그래야 이탤릭과 글자·문단 서식이 유지됩니다. Word는 일반 Ctrl+V로 붙여넣으면 됩니다.
+      </div>
+    </div>
+
     <div id="referenceOutputArea" class="reference-output-area" aria-label="참고문헌 출력 결과"></div>
 
     <div class="reference-output-footer">
       <div id="referenceOutputState" class="reference-output-state">준비됨</div>
       <div class="reference-output-footer-actions">
         <button id="referencePlainCopyBtn" type="button">일반 텍스트 복사</button>
-        <button id="referenceHwpCopyBtn" type="button" title="copy 이벤트의 HTML Format 경로로 i 태그 이탤릭을 직접 복사합니다.">한글용 복사</button>
-        <button id="referenceCopyBtn" type="button" class="primary">Word용 서식 복사</button>
+        <button id="referenceCopyBtn" type="button" class="primary">서식 포함 복사</button>
         <button id="referenceOutputCloseBtn" type="button">닫기</button>
       </div>
     </div>
@@ -123,7 +134,7 @@
       <div>
         <h2>참고문헌 양식 관리</h2>
         <p>
-          기존 Excel의 <code>out_set</code>을 그룹 단위로 관리합니다.
+          템플릿과 함께 글자 모양·문단 모양을 저장합니다.
           템플릿에서 글자를 선택한 뒤 <strong>Ctrl+I</strong>로 이탤릭을 적용할 수 있습니다.
         </p>
       </div>
@@ -147,6 +158,70 @@
           <span>양식 그룹 이름</span>
           <input id="formatGroupNameInput" type="text" autocomplete="off">
         </label>
+
+        <section class="reference-style-section">
+          <div class="format-subsection-title">그룹 공통 글자·문단 모양</div>
+          <div class="reference-style-grid reference-style-grid-common">
+            <label>
+              <span>글꼴</span>
+              <input id="formatGroupFontFamily" class="reference-style-control"
+                     list="referenceFontList" type="text" autocomplete="off">
+            </label>
+            <label>
+              <span>크기(pt)</span>
+              <input id="formatGroupFontSize" class="reference-style-control"
+                     type="number" min="5" max="72" step="0.5">
+            </label>
+            <label>
+              <span>줄간격(%)</span>
+              <input id="formatGroupLineHeight" class="reference-style-control"
+                     type="number" min="80" max="400" step="5">
+            </label>
+            <label>
+              <span>왼쪽 여백(pt)</span>
+              <input id="formatGroupLeftIndent" class="reference-style-control"
+                     type="number" min="0" max="300" step="1">
+            </label>
+            <label>
+              <span>내어쓰기(pt)</span>
+              <input id="formatGroupHangingIndent" class="reference-style-control"
+                     type="number" min="0" max="300" step="1">
+            </label>
+            <label>
+              <span>문단 위(pt)</span>
+              <input id="formatGroupSpaceBefore" class="reference-style-control"
+                     type="number" min="0" max="200" step="1">
+            </label>
+            <label>
+              <span>문단 아래(pt)</span>
+              <input id="formatGroupSpaceAfter" class="reference-style-control"
+                     type="number" min="0" max="200" step="1">
+            </label>
+            <label>
+              <span>정렬</span>
+              <select id="formatGroupAlignment" class="reference-style-control">
+                <option value="left">왼쪽</option>
+                <option value="justify">양쪽</option>
+                <option value="center">가운데</option>
+                <option value="right">오른쪽</option>
+              </select>
+            </label>
+          </div>
+          <div class="reference-style-help">
+            아래 6개 형식은 기본적으로 이 공통 서식을 사용합니다.
+            형식별로 다르게 해야 할 때만 <strong>개별 서식</strong>을 켜세요.
+          </div>
+        </section>
+
+        <datalist id="referenceFontList">
+          <option value="바탕"></option>
+          <option value="함초롬바탕"></option>
+          <option value="맑은 고딕"></option>
+          <option value="돋움"></option>
+          <option value="굴림"></option>
+          <option value="Times New Roman"></option>
+          <option value="Arial"></option>
+        </datalist>
 
         <div class="format-template-list">
           <div class="format-template-row">
@@ -188,7 +263,8 @@
 
         <div class="format-editor-note">
           템플릿 문자는 직접 수정합니다. 이탤릭이 필요한 부분은 텍스트를 선택하고
-          <strong>Ctrl+I</strong>를 누르면 템플릿 자체에 서식으로 저장됩니다.
+          <strong>Ctrl+I</strong>를 누르면 템플릿 자체에 저장됩니다.
+          각 행의 <strong>개별 서식</strong>을 켜면 그 형식만 공통 글자·문단 모양을 덮어씁니다.
         </div>
 
         <div class="format-code-guide">

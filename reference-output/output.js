@@ -1,4 +1,4 @@
-/* 파란 논문 v0.12.0 - 참고문헌 출력 */
+/* 파란 논문 v0.13.0 - 참고문헌 출력 + 글자/문단 서식 */
 (function(global){
   "use strict";
 
@@ -183,6 +183,53 @@
     ) || groups[0] || null;
   }
 
+  function cssFontFamily(value){
+    const name=clean(value) || "바탕";
+    const escaped=name.replace(/["\\]/g,"");
+
+    const fallback=
+      /바탕|serif|times/i.test(name)
+        ? "serif"
+        : "sans-serif";
+
+    return `"${escaped}",${fallback}`;
+  }
+
+  function referenceStyleCss(style){
+    const s=global.ParanPaperData.normalizeReferenceStyle(style);
+    const hanging=Math.min(
+      s.hangingIndentPt,
+      s.leftIndentPt
+    );
+
+    return [
+      `font-family:${cssFontFamily(s.fontFamily)}`,
+      `font-size:${s.fontSizePt}pt`,
+      `line-height:${s.lineHeightPercent}%`,
+      `margin-top:${s.spaceBeforePt}pt`,
+      `margin-right:0pt`,
+      `margin-bottom:${s.spaceAfterPt}pt`,
+      `margin-left:${s.leftIndentPt}pt`,
+      `padding-left:0pt`,
+      `text-indent:-${hanging}pt`,
+      `text-align:${s.alignment}`,
+      "font-weight:normal"
+    ].join(";");
+  }
+
+  function normalizeItalicHtml(html){
+    const box=document.createElement("div");
+    box.innerHTML=html;
+
+    for(const em of box.querySelectorAll("em")){
+      const italic=document.createElement("i");
+      italic.innerHTML=em.innerHTML;
+      em.replaceWith(italic);
+    }
+
+    return box.innerHTML;
+  }
+
   function setState(message,kind=""){
     const el=$("referenceOutputState");
     if(!el)return;
@@ -227,12 +274,21 @@
     paper,
     html,
     sheetIndex,
-    formatKey
+    formatKey,
+    style
   ){
     const item=document.createElement("div");
     item.className="reference-output-item";
-    item.contentEditable="true";
-    item.spellcheck=false;
+
+    const content=document.createElement("div");
+    content.className="reference-output-content";
+    content.contentEditable="true";
+    content.spellcheck=false;
+    content.innerHTML=html;
+    content.setAttribute(
+      "style",
+      referenceStyleCss(style)
+    );
 
     const plain=plainTextFromHtml(html);
 
@@ -240,14 +296,13 @@
     item.dataset.languageGroup=String(
       languageGroup(paper,plain)
     );
-    item.dataset.sortKey=sortKeyFor(
-      paper,
-      plain
-    );
+    item.dataset.sortKey=sortKeyFor(paper,plain);
     item.dataset.formatKey=formatKey;
+    item.dataset.referenceStyle=JSON.stringify(
+      global.ParanPaperData.normalizeReferenceStyle(style)
+    );
 
-    item.innerHTML=html;
-
+    item.append(content);
     return item;
   }
 
@@ -293,11 +348,18 @@
         paper
       );
 
+      const style=
+        global.ParanPaperData.effectiveReferenceStyle(
+          group,
+          key
+        );
+
       const item=makeReferenceElement(
         paper,
         html,
         index,
-        key
+        key,
+        style
       );
 
       area.append(item);
@@ -440,12 +502,12 @@
   function plainOutputText(){
     return [
       ...$("referenceOutputArea")
-        .querySelectorAll(
-          ".reference-output-item"
-        )
+        .querySelectorAll(".reference-output-item")
     ]
       .map(item=>
-        String(item.innerText||"").trim()
+        String(
+          item.querySelector(".reference-output-content")?.innerText || ""
+        ).trim()
       )
       .filter(Boolean)
       .join("\n");
@@ -454,150 +516,37 @@
   function richOutputHtml(){
     const items=[
       ...$("referenceOutputArea")
-        .querySelectorAll(
-          ".reference-output-item"
-        )
+        .querySelectorAll(".reference-output-item")
     ];
 
-    const body=items
-      .map(item=>
-        `<p style="margin:0 0 0.65em 0;">${item.innerHTML}</p>`
-      )
-      .join("");
+    const body=items.map(item=>{
+      const content=item.querySelector(".reference-output-content");
+      let style;
+
+      try{
+        style=JSON.parse(item.dataset.referenceStyle || "{}");
+      }catch(_e){
+        style={};
+      }
+
+      const html=normalizeItalicHtml(
+        content?.innerHTML || ""
+      );
+
+      return (
+        `<p style="${referenceStyleCss(style)}">`+
+        html+
+        "</p>"
+      );
+    }).join("");
 
     return (
-      '<div style="font-family:Arial,\'Malgun Gothic\',sans-serif;'+
-      'font-size:11pt;line-height:1.5;">'+
+      '<div style="background:#ffffff;color:#000000;">'+
       body+
       "</div>"
     );
   }
 
-
-  function hwpHtmlFromCurrentOutput(){
-    const items=[
-      ...$("referenceOutputArea")
-        .querySelectorAll(".reference-output-item")
-    ];
-
-    const rows=items.map(item=>{
-      const box=document.createElement("div");
-      box.innerHTML=item.innerHTML;
-
-      // 한글 테스트용: 이탤릭은 <em> 대신 정확히 <i> 태그로 변환한다.
-      for(const em of box.querySelectorAll("em")){
-        const italic=document.createElement("i");
-        italic.innerHTML=em.innerHTML;
-        em.replaceWith(italic);
-      }
-
-      // 사용자가 출력 결과에서 직접 이탤릭을 준 요소도 <i>로 정규화한다.
-      for(const element of [...box.querySelectorAll("*")]){
-        try{
-          if(
-            element.tagName.toLowerCase()!=="i" &&
-            getComputedStyle(element).fontStyle==="italic"
-          ){
-            const italic=document.createElement("i");
-            italic.innerHTML=element.innerHTML;
-            element.replaceWith(italic);
-          }
-        }catch(_e){}
-      }
-
-      return `<div>${box.innerHTML}</div>`;
-    });
-
-    return (
-      '<html><head><meta charset="utf-8"></head><body>'+
-      '<!--StartFragment-->'+
-      rows.join("")+
-      '<!--EndFragment-->'+
-      "</body></html>"
-    );
-  }
-
-  function copyForHwp(){
-    const plain=plainOutputText();
-
-    if(!plain){
-      setState(
-        "복사할 참고문헌이 없습니다.",
-        "error"
-      );
-      return;
-    }
-
-    const html=hwpHtmlFromCurrentOutput();
-
-    let handled=false;
-
-    const onCopy=event=>{
-      try{
-        if(!event.clipboardData)return;
-
-        // 핵심 테스트:
-        // 브라우저의 실제 copy 이벤트 안에서 text/html을 직접 등록한다.
-        // 이 경로를 통해 Windows에서는 CF_HTML(HTML Format)으로
-        // 변환되는지 아래한글에서 확인한다.
-        event.clipboardData.clearData();
-        event.clipboardData.setData(
-          "text/html",
-          html
-        );
-        event.clipboardData.setData(
-          "text/plain",
-          plain
-        );
-
-        event.preventDefault();
-        handled=true;
-      }catch(error){
-        console.error(
-          "한글용 copy 이벤트 처리 실패:",
-          error
-        );
-      }
-    };
-
-    document.addEventListener(
-      "copy",
-      onCopy,
-      {capture:true,once:true}
-    );
-
-    try{
-      // user gesture 안에서 동기식 copy 이벤트를 발생시킨다.
-      const ok=document.execCommand("copy");
-
-      if(!ok || !handled){
-        throw new Error(
-          "브라우저가 HTML Format용 copy 이벤트를 처리하지 않았습니다."
-        );
-      }
-
-      setState(
-        "한글용 복사 완료 · copy 이벤트에 <i> HTML을 직접 등록했습니다. 아래한글에서 Ctrl+V로 테스트하세요.",
-        "saved"
-      );
-    }catch(error){
-      console.error(error);
-
-      // once:true listener가 아직 실행되지 않았다면 제거한다.
-      try{
-        document.removeEventListener(
-          "copy",
-          onCopy,
-          true
-        );
-      }catch(_e){}
-
-      setState(
-        `한글용 복사 실패: ${error.message}`,
-        "error"
-      );
-    }
-  }
 
   async function fallbackRichCopy(){
     const area=$("referenceOutputArea");
@@ -667,7 +616,7 @@
       }
 
       setState(
-        "서식 포함 복사 완료 · Word/한글에 붙여 넣으세요.",
+        "서식 포함 복사 완료 · Word는 Ctrl+V, 아래한글은 반드시 Ctrl+Alt+V → 인터넷 문서로 붙여 넣으세요.",
         "saved"
       );
     }catch(error){
@@ -676,7 +625,7 @@
       try{
         await fallbackRichCopy();
         setState(
-          "서식 포함 복사 완료 · Word/한글에 붙여 넣으세요.",
+          "서식 포함 복사 완료 · Word는 Ctrl+V, 아래한글은 반드시 Ctrl+Alt+V → 인터넷 문서로 붙여 넣으세요.",
           "saved"
         );
       }catch(fallbackError){
@@ -748,7 +697,6 @@
     $("referenceSortBtn").onclick=sortKoreanFirst;
     $("referenceSheetOrderBtn").onclick=restoreSheetOrder;
     $("referenceCopyBtn").onclick=copyRich;
-    $("referenceHwpCopyBtn").onclick=copyForHwp;
     $("referencePlainCopyBtn").onclick=copyPlain;
     $("referenceOutputCloseBtn").onclick=close;
     $("referenceOutputCloseIconBtn").onclick=close;

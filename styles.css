@@ -556,3 +556,155 @@ th{position:sticky;top:0;background:#f8fafc;color:#475569;font-size:12px;z-index
 
 
 /* v0.12.2 - 한글용 복사는 화면이 아니라 숨은 1x1 Excel 유사 표를 사용 */
+
+
+/* v0.13.0 - 참고문헌 글자/문단 서식 */
+.reference-style-section{
+  margin:0 0 18px;
+  padding:13px 14px;
+  border:1px solid #dbe3ee;
+  border-radius:10px;
+  background:#f8fafc;
+}
+.reference-style-grid{
+  display:grid;
+  gap:8px 10px;
+}
+.reference-style-grid-common{
+  grid-template-columns:repeat(4,minmax(120px,1fr));
+}
+.reference-style-grid label,
+.reference-style-mini-field{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  min-width:0;
+}
+.reference-style-grid label>span,
+.reference-style-mini-field>span{
+  color:#475569;
+  font-size:10.5px;
+  font-weight:700;
+}
+.reference-style-grid input,
+.reference-style-grid select,
+.reference-style-mini-field input,
+.reference-style-mini-field select{
+  min-width:0;
+  box-sizing:border-box;
+  border:1px solid #cbd5e1;
+  border-radius:6px;
+  padding:6px 7px;
+  background:#fff;
+  color:#0f172a;
+  font:inherit;
+  font-size:11px;
+}
+.reference-style-help{
+  margin-top:8px;
+  color:#64748b;
+  font-size:10.5px;
+  line-height:1.45;
+}
+.format-template-row{
+  grid-template-columns:112px minmax(0,1fr) 86px;
+  align-items:start;
+}
+.format-override-toggle{
+  display:flex;
+  align-items:center;
+  gap:5px;
+  min-height:40px;
+  color:#475569;
+  font-size:10.5px;
+  font-weight:700;
+  cursor:pointer;
+}
+.format-override-toggle input{
+  margin:0;
+}
+.format-style-override{
+  grid-column:2 / 4;
+  display:grid;
+  grid-template-columns:repeat(4,minmax(105px,1fr));
+  gap:7px 9px;
+  padding:9px 10px;
+  border:1px dashed #cbd5e1;
+  border-radius:8px;
+  background:#fbfdff;
+}
+.format-style-override[hidden]{
+  display:none;
+}
+.reference-output-item{
+  padding:8px 10px;
+}
+.reference-output-content{
+  min-width:0;
+  overflow-wrap:anywhere;
+}
+.reference-output-content:focus{
+  outline:2px solid rgba(59,130,246,.15);
+  border-radius:4px;
+}
+.hwp-paste-alert{
+  margin:10px 16px 0;
+  padding:13px 15px;
+  border:2px solid #f59e0b;
+  border-radius:10px;
+  background:#fffbeb;
+  color:#78350f;
+}
+.hwp-paste-alert-title{
+  margin-bottom:5px;
+  color:#b45309;
+  font-size:12px;
+  font-weight:900;
+  letter-spacing:.01em;
+}
+.hwp-paste-alert-main{
+  font-size:13.5px;
+  line-height:1.55;
+  font-weight:700;
+}
+.hwp-paste-alert-main strong{
+  color:#b91c1c;
+  font-size:15px;
+}
+.hwp-paste-alert kbd{
+  display:inline-block;
+  min-width:22px;
+  padding:2px 5px;
+  border:1px solid #d1d5db;
+  border-bottom-width:2px;
+  border-radius:5px;
+  background:#fff;
+  color:#111827;
+  font-family:inherit;
+  font-size:.92em;
+  text-align:center;
+}
+.hwp-paste-alert-sub{
+  margin-top:4px;
+  color:#92400e;
+  font-size:10.5px;
+  line-height:1.45;
+}
+@media(max-width:900px){
+  .reference-style-grid-common,
+  .format-style-override{
+    grid-template-columns:repeat(2,minmax(105px,1fr));
+  }
+}
+@media(max-width:600px){
+  .reference-style-grid-common,
+  .format-style-override{
+    grid-template-columns:1fr;
+  }
+  .format-template-row{
+    grid-template-columns:1fr;
+  }
+  .format-style-override{
+    grid-column:1;
+  }
+}

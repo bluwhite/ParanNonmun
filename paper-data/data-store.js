@@ -3,7 +3,7 @@
   "use strict";
 
   const DATA_FILE_NAME = "파란논문.json";
-  const SCHEMA_VERSION = 5;
+  const SCHEMA_VERSION = 6;
   const MANAGED_SHEET_ID = "paran-paper-list";
 
   const SYSTEM_COLUMNS = [
@@ -48,12 +48,142 @@
     {code:"VL/IS",label:"권/호"}
   ];
 
+  const DEFAULT_REFERENCE_STYLE = Object.freeze({
+    fontFamily:"바탕",
+    fontSizePt:10,
+    lineHeightPercent:160,
+    leftIndentPt:20,
+    hangingIndentPt:20,
+    spaceBeforePt:0,
+    spaceAfterPt:0,
+    alignment:"left"
+  });
+
+  const REFERENCE_ALIGNMENTS = Object.freeze([
+    "left","center","right","justify"
+  ]);
+
+  function finiteNumber(value,fallback,min,max){
+    const number=Number(value);
+    if(!Number.isFinite(number))return fallback;
+    return Math.min(max,Math.max(min,number));
+  }
+
+  function normalizeReferenceStyle(raw={},fallback=DEFAULT_REFERENCE_STYLE){
+    const base={
+      ...DEFAULT_REFERENCE_STYLE,
+      ...(fallback && typeof fallback==="object" ? fallback : {})
+    };
+
+    const alignment=REFERENCE_ALIGNMENTS.includes(
+      String(raw?.alignment||"").trim()
+    )
+      ? String(raw.alignment).trim()
+      : base.alignment;
+
+    return {
+      fontFamily:
+        String(raw?.fontFamily??base.fontFamily)
+          .normalize("NFKC")
+          .trim() || base.fontFamily,
+      fontSizePt:finiteNumber(
+        raw?.fontSizePt,
+        Number(base.fontSizePt)||10,
+        5,
+        72
+      ),
+      lineHeightPercent:finiteNumber(
+        raw?.lineHeightPercent,
+        Number(base.lineHeightPercent)||160,
+        80,
+        400
+      ),
+      leftIndentPt:finiteNumber(
+        raw?.leftIndentPt,
+        Number(base.leftIndentPt)||0,
+        0,
+        300
+      ),
+      hangingIndentPt:finiteNumber(
+        raw?.hangingIndentPt,
+        Number(base.hangingIndentPt)||0,
+        0,
+        300
+      ),
+      spaceBeforePt:finiteNumber(
+        raw?.spaceBeforePt,
+        Number(base.spaceBeforePt)||0,
+        0,
+        200
+      ),
+      spaceAfterPt:finiteNumber(
+        raw?.spaceAfterPt,
+        Number(base.spaceAfterPt)||0,
+        0,
+        200
+      ),
+      alignment
+    };
+  }
+
+  function defaultFormatStyles(groupStyle=DEFAULT_REFERENCE_STYLE){
+    const style=normalizeReferenceStyle(groupStyle);
+    const result={};
+
+    for(const item of REFERENCE_FORMAT_ITEMS){
+      result[item.key]={
+        useGroupStyle:true,
+        style:{...style}
+      };
+    }
+
+    return result;
+  }
+
+  function normalizeFormatStyles(raw={},groupStyle=DEFAULT_REFERENCE_STYLE){
+    const result={};
+    const baseStyle=normalizeReferenceStyle(groupStyle);
+
+    for(const item of REFERENCE_FORMAT_ITEMS){
+      const itemRaw=
+        raw && typeof raw[item.key]==="object"
+          ? raw[item.key]
+          : {};
+
+      result[item.key]={
+        useGroupStyle:itemRaw.useGroupStyle!==false,
+        style:normalizeReferenceStyle(
+          itemRaw.style,
+          baseStyle
+        )
+      };
+    }
+
+    return result;
+  }
+
+  function effectiveReferenceStyle(group,formatKey){
+    const groupStyle=normalizeReferenceStyle(group?.style);
+    const formatEntry=group?.formatStyles?.[formatKey];
+
+    if(!formatEntry || formatEntry.useGroupStyle!==false){
+      return groupStyle;
+    }
+
+    return normalizeReferenceStyle(
+      formatEntry.style,
+      groupStyle
+    );
+  }
+
   // 기존 Excel out_set의 아래쪽 세 묶음을 그대로 옮긴 기본값.
   // 이탤릭은 템플릿 HTML 자체의 <em>...</em>으로 보존한다.
   const DEFAULT_REFERENCE_FORMAT_GROUPS = [
     {
       id:"format-group-kyunghee",
       name:"경사대양식",
+      style:{...DEFAULT_REFERENCE_STYLE},
+      formatStyles:defaultFormatStyles(DEFAULT_REFERENCE_STYLE),
       formats:{
         journalKo:"AU(PY), 「TI」, 『JO』 VL+IS, PB, pp.SP-EP.",
         thesisKo:"AU(PY), 「TI」, JO.",
@@ -66,6 +196,8 @@
     {
       id:"format-group-1",
       name:"양식1",
+      style:{...DEFAULT_REFERENCE_STYLE},
+      formatStyles:defaultFormatStyles(DEFAULT_REFERENCE_STYLE),
       formats:{
         journalKo:"AU. (PY). TI. JO, VL/IS, SP-EP.",
         thesisKo:"AU. (PY). TI. JO.",
@@ -78,6 +210,8 @@
     {
       id:"format-group-2",
       name:"양식2",
+      style:{...DEFAULT_REFERENCE_STYLE},
+      formatStyles:defaultFormatStyles(DEFAULT_REFERENCE_STYLE),
       formats:{
         journalKo:"AU(PY), &quot;TI&quot;, JO, VL/IS, SP-EP쪽.",
         thesisKo:"AU(PY), &quot;TI&quot;, JO.",
@@ -93,6 +227,18 @@
     return DEFAULT_REFERENCE_FORMAT_GROUPS.map(group=>({
       id:group.id,
       name:group.name,
+      style:{...group.style},
+      formatStyles:Object.fromEntries(
+        Object.entries(group.formatStyles).map(
+          ([key,value])=>[
+            key,
+            {
+              useGroupStyle:value.useGroupStyle!==false,
+              style:{...value.style}
+            }
+          ]
+        )
+      ),
       formats:{...group.formats}
     }));
   }
@@ -156,9 +302,21 @@
       formats[item.key]=sanitizeTemplateHtml(value);
     }
 
+    const style=normalizeReferenceStyle(
+      raw?.style,
+      base?.style || DEFAULT_REFERENCE_STYLE
+    );
+
+    const formatStyles=normalizeFormatStyles(
+      raw?.formatStyles,
+      style
+    );
+
     return {
       id:String(raw.id||"").trim() || newId("ref-group"),
       name:String(raw.name||"").normalize("NFKC").trim(),
+      style,
+      formatStyles,
       formats
     };
   }
@@ -481,10 +639,15 @@
     hasDuplicateColumnName,
     REFERENCE_FORMAT_ITEMS,
     REFERENCE_TEMPLATE_CODES,
+    DEFAULT_REFERENCE_STYLE,
+    REFERENCE_ALIGNMENTS,
     DEFAULT_REFERENCE_FORMAT_GROUPS,
     cloneDefaultReferenceFormatGroups,
     normalizeReferenceFormatGroup,
     normalizeReferenceFormatGroups,
+    normalizeReferenceStyle,
+    normalizeFormatStyles,
+    effectiveReferenceStyle,
     normalizeReferenceFormatGroupName,
     sanitizeTemplateHtml,
     templateText,
