@@ -9,16 +9,21 @@
   let univerAPI=null;
   let changeDisposable=null;
   let commandDisposable=null;
+  let cellClickDisposable=null;
+  let hostDoubleClickElement=null;
+  let hostDoubleClickHandler=null;
   let currentData=null;
   let onDataChange=async()=>{};
   let onCount=()=>{};
   let onStatus=()=>{};
+  let onPdfDoubleClick=async()=>{};
   let syncTimer=null;
   let syncing=false;
   let restoring=false;
   let lastSnapshotJson="";
   let lastValidSnapshot=null;
   let findCursor={query:"",index:-1};
+  let lastPdfCellClick={row:-1,column:-1,time:0};
 
   function clone(value){
     return value==null ? value : JSON.parse(JSON.stringify(value));
@@ -243,11 +248,184 @@
     return workbook.getSheetBySheetId?.(MANAGED_SHEET_ID) || workbook.getActiveSheet?.() || null;
   }
 
+
+  function systemColumnIndex(snapshot,field){
+    const managed=getManagedSheet(snapshot);
+    if(!managed)return null;
+
+    const wanted=global.ParanPaperData.SYSTEM_COLUMNS
+      .find(column=>column.field===field);
+
+    if(!wanted)return null;
+
+    const wantedName=
+      global.ParanPaperData.normalizeColumnName(wanted.name);
+
+    const header=getHeaders(managed)
+      .find(item=>
+        global.ParanPaperData.normalizeColumnName(item.name)===wantedName
+      );
+
+    return header ? header.index : null;
+  }
+
+  function fieldAtColumn(snapshot,columnIndex){
+    const managed=getManagedSheet(snapshot);
+    if(!managed)return null;
+
+    const row=managed.cellData?.[0] || managed.cellData?.["0"] || {};
+    const name=cellText(row[columnIndex] ?? row[String(columnIndex)])
+      .normalize("NFKC")
+      .trim();
+
+    if(!name)return null;
+
+    const key=global.ParanPaperData.normalizeColumnName(name);
+    const system=global.ParanPaperData.SYSTEM_COLUMNS.find(column=>
+      global.ParanPaperData.normalizeColumnName(column.name)===key
+    );
+
+    return system?.field || null;
+  }
+
+  function contextAt(rowIndex,columnIndex=null){
+    const workbook=getActiveWorkbook();
+    if(!workbook)return null;
+
+    const snapshot=workbook.save();
+    const managed=getManagedSheet(snapshot);
+    if(!managed || !Number.isInteger(rowIndex) || rowIndex<=0)return null;
+
+    const row=managed.cellData?.[rowIndex] ||
+      managed.cellData?.[String(rowIndex)] ||
+      {};
+
+    function value(field){
+      const column=systemColumnIndex(snapshot,field);
+      if(column===null)return "";
+      return cellText(row[column] ?? row[String(column)]);
+    }
+
+    return {
+      rowIndex,
+      columnIndex,
+      field:Number.isInteger(columnIndex)
+        ? fieldAtColumn(snapshot,columnIndex)
+        : null,
+      title:value("title"),
+      pdf:value("pdf")
+    };
+  }
+
+  function getSelectedRowContext(){
+    const worksheet=getManagedWorksheet();
+    if(!worksheet)return null;
+
+    try{
+      const selection=worksheet.getSelection?.();
+      const current=selection?.getCurrentCell?.();
+
+      if(current){
+        const row=Number.isInteger(current.actualRow)
+          ? current.actualRow
+          : current.row;
+        const column=Number.isInteger(current.actualColumn)
+          ? current.actualColumn
+          : current.column;
+
+        if(Number.isInteger(row)){
+          return contextAt(
+            row,
+            Number.isInteger(column) ? column : null
+          );
+        }
+      }
+
+      const active=selection?.getActiveRange?.();
+      const row=active?.getRow?.();
+      const column=active?.getColumn?.();
+
+      if(Number.isInteger(row)){
+        return contextAt(
+          row,
+          Number.isInteger(column) ? column : null
+        );
+      }
+    }catch(error){
+      console.warn("선택 셀 확인 실패:",error);
+    }
+
+    return null;
+  }
+
+  async function setSystemFieldAtRow(rowIndex,field,value){
+    const worksheet=getManagedWorksheet();
+    const workbook=getActiveWorkbook();
+
+    if(!worksheet || !workbook){
+      throw new Error("논문 목록 시트를 찾지 못했습니다.");
+    }
+
+    try{
+      await workbook.endEditingAsync?.(true);
+    }catch(_e){}
+
+    const snapshot=workbook.save();
+    const column=systemColumnIndex(snapshot,field);
+
+    if(column===null){
+      const definition=global.ParanPaperData.SYSTEM_COLUMNS
+        .find(item=>item.field===field);
+      throw new Error(
+        `${definition?.name || field} 열을 찾지 못했습니다.`
+      );
+    }
+
+    if(!Number.isInteger(rowIndex) || rowIndex<=0){
+      throw new Error("논문 행을 선택하세요.");
+    }
+
+    restoring=true;
+    try{
+      worksheet
+        .getRange(rowIndex,column)
+        .setValue(String(value??""));
+    }finally{
+      restoring=false;
+    }
+
+    return syncNow(true);
+  }
+
+  function firePdfDoubleClick(context){
+    if(!context || context.rowIndex<=0 || context.field!=="pdf")return;
+
+    Promise.resolve(
+      onPdfDoubleClick(context)
+    ).catch(error=>{
+      console.error("PDF 더블클릭 열기 실패:",error);
+    });
+  }
+
   function disposeListeners(){
     try{changeDisposable?.dispose?.();}catch(_e){}
     try{commandDisposable?.dispose?.();}catch(_e){}
+    try{cellClickDisposable?.dispose?.();}catch(_e){}
+
+    if(hostDoubleClickElement && hostDoubleClickHandler){
+      try{
+        hostDoubleClickElement.removeEventListener(
+          "dblclick",
+          hostDoubleClickHandler
+        );
+      }catch(_e){}
+    }
+
     changeDisposable=null;
     commandDisposable=null;
+    cellClickDisposable=null;
+    hostDoubleClickElement=null;
+    hostDoubleClickHandler=null;
   }
 
   function disposeWorkbook(){
@@ -324,7 +502,55 @@
       );
     }
 
-    commandDisposable=univerAPI.onCommandExecuted?.(()=>scheduleSync(300)) || null;
+    commandDisposable=
+      univerAPI.onCommandExecuted?.(()=>scheduleSync(300)) || null;
+
+    // Univer의 셀 클릭 이벤트가 있으면 같은 PDF 셀을 짧은 시간 안에
+    // 두 번 클릭한 것을 더블클릭으로 간주한다.
+    if(univerAPI.Event?.CellClicked){
+      cellClickDisposable=univerAPI.addEvent(
+        univerAPI.Event.CellClicked,
+        params=>{
+          const row=params?.row;
+          const column=params?.column;
+
+          if(!Number.isInteger(row) || !Number.isInteger(column))return;
+
+          const context=contextAt(row,column);
+          if(context?.field!=="pdf"){
+            lastPdfCellClick={row:-1,column:-1,time:0};
+            return;
+          }
+
+          const now=Date.now();
+          const isDouble=
+            lastPdfCellClick.row===row &&
+            lastPdfCellClick.column===column &&
+            now-lastPdfCellClick.time<=480;
+
+          lastPdfCellClick={row,column,time:now};
+
+          if(isDouble){
+            lastPdfCellClick={row:-1,column:-1,time:0};
+            firePdfDoubleClick(context);
+          }
+        }
+      );
+      return;
+    }
+
+    // 구버전에서 CellClicked가 노출되지 않는 경우 DOM dblclick을 보조로 사용.
+    const host=document.getElementById("paperSheet");
+    if(host){
+      hostDoubleClickElement=host;
+      hostDoubleClickHandler=()=>{
+        setTimeout(()=>{
+          const context=getSelectedRowContext();
+          firePdfDoubleClick(context);
+        },0);
+      };
+      host.addEventListener("dblclick",hostDoubleClickHandler);
+    }
   }
 
   function scheduleSync(delay=280){
@@ -528,6 +754,7 @@
     onDataChange=options.onDataChange || onDataChange;
     onCount=options.onCount || onCount;
     onStatus=options.onStatus || onStatus;
+    onPdfDoubleClick=options.onPdfDoubleClick || onPdfDoubleClick;
     ensureUniver(options.containerId);
     await loadWorkbook(options.data);
   }
@@ -546,6 +773,8 @@
     addColumn,
     moveSelectedColumn,
     findNext,
+    getSelectedRowContext,
+    setSystemFieldAtRow,
     getData
   };
 })(window);

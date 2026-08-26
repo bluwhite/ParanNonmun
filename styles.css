@@ -85,3 +85,17 @@ th{position:sticky;top:0;background:#f8fafc;color:#475569;font-size:12px;z-index
 @media(max-width:800px){
   .brand-line .tiny-button{margin-left:0}
 }
+
+
+/* v0.10.5 PDF 연결 */
+#downloadFolderBtn.configured{
+  border-color:#93c5fd;
+  background:#eff6ff;
+  color:#1d4ed8;
+}
+#pdfLinkBtn,#pdfOpenBtn{
+  white-space:nowrap;
+}
+.save-state.warning{
+  color:#92400e;
+}

@@ -1,4 +1,4 @@
-const APP_VERSION = "0.10.4";
+const APP_VERSION = "0.10.5";
 
 const DB_NAME='paper-pdf-singlefile-db';
 const STORE='handles';
@@ -9,19 +9,34 @@ function openDb(){
     r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);
   });
 }
-async function saveRootHandle(h){
+async function saveHandle(key,h){
   const db=await openDb();
   return new Promise((resolve,reject)=>{
-    const tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).put(h,'root');
-    tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);
+    const tx=db.transaction(STORE,'readwrite');
+    tx.objectStore(STORE).put(h,key);
+    tx.oncomplete=resolve;
+    tx.onerror=()=>reject(tx.error);
   });
 }
-async function loadRootHandle(){
+async function loadHandle(key){
   const db=await openDb();
   return new Promise((resolve,reject)=>{
-    const r=db.transaction(STORE,'readonly').objectStore(STORE).get('root');
-    r.onsuccess=()=>resolve(r.result||null);r.onerror=()=>reject(r.error);
+    const r=db.transaction(STORE,'readonly').objectStore(STORE).get(key);
+    r.onsuccess=()=>resolve(r.result||null);
+    r.onerror=()=>reject(r.error);
   });
+}
+async function saveRootHandle(h){
+  return saveHandle('root',h);
+}
+async function loadRootHandle(){
+  return loadHandle('root');
+}
+async function saveDownloadHandle(h){
+  return saveHandle('download',h);
+}
+async function loadDownloadHandle(){
+  return loadHandle('download');
 }
 async function ensurePermission(h,mode='readwrite',mayPrompt=true){
   const opt={mode};

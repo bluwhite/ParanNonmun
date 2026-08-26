@@ -1,4 +1,5 @@
 let rootHandle=null;
+let downloadHandle=null;
 let pdfs=[];
 let dataStore=null;
 let paperData={columns:[],papers:[],sheetSnapshot:null};
@@ -25,7 +26,8 @@ async function walk(dir,prefix=""){
 
 function setFolderReady(ready){
   for(const id of [
-    "noteSearchBtn","addPaperBtn","paperFindBtn","aiSettingsBtn"
+    "noteSearchBtn","addPaperBtn","paperFindBtn","aiSettingsBtn",
+    "pdfLinkBtn","pdfOpenBtn"
   ]){
     const el=$(id);
     if(el)el.disabled=!ready;
@@ -61,7 +63,8 @@ async function mountPaperSheet(){
     data:paperData,
     onDataChange:savePaperData,
     onCount:setPaperCount,
-    onStatus:setSaveState
+    onStatus:setSaveState,
+    onPdfDoubleClick:context=>openPdfFromRowContext(context,false)
   });
 }
 
@@ -224,6 +227,288 @@ async function saveAiSettings(){
   }
 }
 
+
+function markDownloadFolder(handle,permission=""){
+  const button=$("downloadFolderBtn");
+  if(!button)return;
+
+  const configured=!!handle;
+  button.classList.toggle("configured",configured);
+
+  if(!configured){
+    button.textContent="다운로드 폴더";
+    button.title="PDF를 내려받는 폴더를 지정합니다.";
+    return;
+  }
+
+  button.textContent="다운로드 폴더 ✓";
+  button.title=permission==="granted"
+    ? `다운로드 폴더: ${handle.name}`
+    : `다운로드 폴더: ${handle.name} · 사용 시 권한을 다시 요청할 수 있습니다.`;
+}
+
+async function refreshDownloadFolder(){
+  downloadHandle=await loadDownloadHandle();
+
+  if(!downloadHandle){
+    markDownloadFolder(null);
+    return null;
+  }
+
+  let permission="";
+  try{
+    permission=await downloadHandle.queryPermission({mode:"readwrite"});
+  }catch(_error){}
+
+  markDownloadFolder(downloadHandle,permission);
+  return downloadHandle;
+}
+
+async function chooseDownloadFolder(){
+  if(typeof window.showDirectoryPicker!=="function"){
+    alert(
+      "현재 브라우저에서는 폴더 선택 기능을 사용할 수 없습니다. Chrome 또는 Edge 최신 버전을 사용하세요."
+    );
+    return null;
+  }
+
+  try{
+    const handle=await showDirectoryPicker({
+      id:"paran-paper-download-folder",
+      mode:"readwrite",
+      startIn:"downloads"
+    });
+
+    if(!await ensurePermission(handle,"readwrite",true)){
+      throw new Error("다운로드 폴더 쓰기 권한이 필요합니다.");
+    }
+
+    downloadHandle=handle;
+    await saveDownloadHandle(handle);
+    markDownloadFolder(handle,"granted");
+
+    setSaveState(
+      `다운로드 폴더: ${handle.name}`,
+      "saved"
+    );
+
+    return handle;
+  }catch(error){
+    if(error?.name==="AbortError")return null;
+
+    console.error(error);
+    setSaveState(
+      `다운로드 폴더 오류: ${error.message}`,
+      "error"
+    );
+    alert(`다운로드 폴더 오류: ${error.message}`);
+    return null;
+  }
+}
+
+function selectedPaperContext(){
+  const context=
+    ParanPaperSheet.getSelectedRowContext?.();
+
+  if(!context || context.rowIndex<=0){
+    throw new Error("먼저 논문 목록에서 작업할 행의 셀을 선택하세요.");
+  }
+
+  return context;
+}
+
+function failPdfAction(message){
+  setSaveState(message,"error");
+  alert(message);
+}
+
+async function linkPdfToSelectedRow(){
+  if(!rootHandle){
+    failPdfAction("PDF 연결 실패: 먼저 논문 폴더를 선택하세요.");
+    return;
+  }
+
+  let context;
+
+  try{
+    // 파일 선택창을 열기 전에 현재 선택 행과 논문명을 동기적으로 확인한다.
+    // 그래야 브라우저의 사용자 활성화가 파일 선택창까지 유지된다.
+    context=selectedPaperContext();
+
+    const title=String(context.title||"").trim();
+    if(!title){
+      failPdfAction(
+        "PDF 연결 실패: 선택한 행에 논문명이 없습니다."
+      );
+      return;
+    }
+
+    if(!downloadHandle){
+      failPdfAction(
+        "PDF 연결 실패: 먼저 상단의 '다운로드 폴더' 버튼으로 폴더를 지정하세요."
+      );
+      return;
+    }
+
+    if(
+      !await ensurePermission(
+        downloadHandle,
+        "readwrite",
+        true
+      )
+    ){
+      failPdfAction(
+        "PDF 연결 실패: 다운로드 폴더 접근 권한이 필요합니다."
+      );
+      return;
+    }
+
+    const selected=
+      await ParanPdfLink.pickPdfFromDownloadFolder(
+        downloadHandle
+      );
+
+    if(!selected)return;
+
+    setSaveState("PDF를 논문 폴더로 복사 중...","saving");
+
+    const copied=
+      await ParanPdfLink.copyPdfToLibrary(
+        selected.fileHandle,
+        rootHandle,
+        title
+      );
+
+    // PDF 열에는 확장자를 제외한 실제 새 파일명만 기록.
+    try{
+      await ParanPaperSheet.setSystemFieldAtRow(
+        context.rowIndex,
+        "pdf",
+        copied.baseName
+      );
+    }catch(error){
+      // 시트 연결에 실패하면 다운로드 원본은 그대로 두고
+      // 새로 만든 대상 파일만 정리한다.
+      try{
+        await rootHandle.removeEntry(copied.fileName);
+      }catch(_e){}
+      throw error;
+    }
+
+    const sourceDeleted=
+      await ParanPdfLink.removeSourceFile(
+        downloadHandle,
+        selected.fileName
+      );
+
+    await scanPdfs();
+
+    if(sourceDeleted){
+      setSaveState(
+        `PDF 연결 완료: ${copied.fileName}`,
+        "saved"
+      );
+    }else{
+      setSaveState(
+        `PDF 연결 완료: ${copied.fileName} · 다운로드 폴더의 원본은 삭제하지 못했습니다.`,
+        "warning"
+      );
+    }
+  }catch(error){
+    if(error?.name==="AbortError")return;
+
+    console.error(error);
+    failPdfAction(
+      `PDF 연결 실패: ${error.message}`
+    );
+  }
+}
+
+function currentPdfPath(value){
+  return ParanPdfLink.findPdfPath(
+    pdfs,
+    value
+  );
+}
+
+async function openPdfFromRowContext(context,showErrors=true){
+  try{
+    if(!context || context.rowIndex<=0){
+      throw new Error(
+        "먼저 논문 목록에서 PDF를 열 행의 셀을 선택하세요."
+      );
+    }
+
+    const pdfValue=String(context.pdf||"").trim();
+
+    if(!pdfValue){
+      throw new Error(
+        "선택한 행에 연결된 PDF가 없습니다."
+      );
+    }
+
+    let path=currentPdfPath(pdfValue);
+
+    if(path){
+      openPdf(path);
+      return;
+    }
+
+    // 새 창을 먼저 열어 popup 차단을 피한 뒤 PDF 목록을 다시 확인한다.
+    const pending=window.open("about:blank","_blank");
+
+    await scanPdfs();
+    path=currentPdfPath(pdfValue);
+
+    if(!path){
+      try{pending?.close?.();}catch(_e){}
+      throw new Error(
+        `연결된 PDF 파일을 논문 폴더에서 찾지 못했습니다: ${pdfValue}`
+      );
+    }
+
+    const url=new URL(
+      "./pdf-editor/index.html",
+      location.href
+    );
+    url.searchParams.set("file",path);
+
+    if(pending){
+      pending.location.href=url.toString();
+    }else{
+      openPdf(path);
+    }
+  }catch(error){
+    console.error(error);
+
+    if(showErrors){
+      failPdfAction(
+        `PDF 열기 실패: ${error.message}`
+      );
+    }else{
+      setSaveState(
+        `PDF 열기 실패: ${error.message}`,
+        "error"
+      );
+    }
+  }
+}
+
+function openPdfForSelectedRow(){
+  let context;
+
+  try{
+    context=selectedPaperContext();
+  }catch(error){
+    failPdfAction(
+      `PDF 열기 실패: ${error.message}`
+    );
+    return;
+  }
+
+  openPdfFromRowContext(context,true);
+}
+
 async function scanPdfs(){
   pdfs=await walk(rootHandle);
   pdfs.sort((a,b)=>a.path.localeCompare(b.path,"ko"));
@@ -339,6 +624,11 @@ async function searchPdfNotes(){
   }
 }
 
+
+$("downloadFolderBtn").onclick=chooseDownloadFolder;
+$("pdfLinkBtn").onclick=linkPdfToSelectedRow;
+$("pdfOpenBtn").onclick=openPdfForSelectedRow;
+
 $("paperFindBtn").onclick=findInSheet;
 $("paperSearchBox").addEventListener("keydown",event=>{
   if(event.key==="Enter")findInSheet();
@@ -419,6 +709,8 @@ window.addEventListener("beforeunload",()=>{
 });
 
 (async()=>{
+  await refreshDownloadFolder();
+
   const saved=await loadRootHandle();
   if(saved){
     rootHandle=saved;

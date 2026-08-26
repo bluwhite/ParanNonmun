@@ -17,6 +17,7 @@
       </div>
       <span id="folderInfo" class="folder-info">현재 폴더: 선택되지 않음</span>
       <button id="chooseBtn" class="primary folder-select-btn">논문 폴더 선택</button>
+      <button id="downloadFolderBtn" class="tiny-button">다운로드 폴더</button>
       <button id="aiSettingsBtn" class="tiny-button" disabled>AI 설정</button>
     </div>
     <span id="versionBadge" class="version"></span>
@@ -32,6 +33,8 @@
         <input id="paperSearchBox" type="search" placeholder="시트에서 찾기">
         <button id="paperFindBtn" disabled>찾기</button>
         <button id="addPaperBtn" class="primary" disabled>논문 추가</button>
+        <button id="pdfLinkBtn" disabled>PDF 연결</button>
+        <button id="pdfOpenBtn" disabled>PDF 열기</button>
       </div>
     </div>
     <div class="save-line">
@@ -101,6 +104,7 @@
 <script src="./ai-config/credential-store.js"></script>
 <script src="./paper-data/data-store.js"></script>
 <script src="./paper-sheet/univer-sheet.js"></script>
+<script src="./pdf-link/pdf-link.js"></script>
 <script src="./pdf-search/note-search.js"></script>
 <script src="./main.js"></script>
 </body>
