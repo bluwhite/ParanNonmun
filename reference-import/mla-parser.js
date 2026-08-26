@@ -156,6 +156,23 @@
       return result;
     }
 
+    // 국내 DB에서 변환된 MLA 형식:
+    //   권, 9호, 2018, 65-88
+    //   6권, 2호, 2018, 27-44
+    // '권' 뒤에 숫자가 없으면 volume은 빈 값으로 둔다.
+    const koreanMeta=text.match(
+      /(?:^|,\s*)\s*(?:(\d+)\s*권|권)?\s*,?\s*(\d+)\s*호\s*,\s*((?:19|20)\d{2})\s*,\s*(\d+)\s*[-–—]\s*(\d+)/
+    );
+
+    if(koreanMeta){
+      result.volume=koreanMeta[1]||"";
+      result.issue=koreanMeta[2]||"";
+      result.year=koreanMeta[3]||"";
+      result.startPage=koreanMeta[4]||"";
+      result.endPage=koreanMeta[5]||"";
+      return result;
+    }
+
     const volume=text.match(/\bvol\.?\s*([0-9A-Za-z-]+)/i);
     if(volume)result.volume=stripEdge(volume[1]);
 
@@ -182,8 +199,18 @@
         result.startPage=colonPages[1];
         result.endPage=colonPages[2];
       }else{
-        const single=text.match(/\bp\.?\s*(\d+)\b/i);
-        if(single)result.startPage=single[1];
+        // "2018, 65-88"처럼 pp.가 없는 MLA 변환 결과
+        const barePages=text.match(
+          /(?:^|,\s*)(\d+)\s*[-–—]\s*(\d+)\s*\.?\s*$/
+        );
+
+        if(barePages){
+          result.startPage=barePages[1];
+          result.endPage=barePages[2];
+        }else{
+          const single=text.match(/\bp\.?\s*(\d+)\b/i);
+          if(single)result.startPage=single[1];
+        }
       }
     }
 
@@ -210,7 +237,7 @@
     }
 
     const boundary=afterTitle.search(
-      /,\s*(?:vol\.?|no\.?|(?:19|20)\d{2}\b|pp?\.)/i
+      /,\s*(?:vol\.?|no\.?|권(?=\s*,|\s|$)|\d+\s*권(?=\s*,|\s|$)|\d+\s*호(?=\s*,|\s|$)|(?:19|20)\d{2}\b|pp?\.)/i
     );
 
     if(boundary>=0){

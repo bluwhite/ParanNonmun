@@ -89,7 +89,13 @@
 
   function findMetadataStart(remainder){
     const patterns=[
+      // 권(호), 페이지
       /,\s*\d+\s*\(\s*[^)]+\s*\)\s*,\s*(?:pp?\.\s*)?\d+(?:\s*[-–—]\s*\d+)?/i,
+
+      // (호), 페이지 — 권이 없는 국내 학술지 표기
+      /,\s*\(\s*[^)]+\s*\)\s*,\s*(?:pp?\.\s*)?\d+(?:\s*[-–—]\s*\d+)?/i,
+
+      // 권, 페이지
       /,\s*\d+\s*,\s*(?:pp?\.\s*)?\d+(?:\s*[-–—]\s*\d+)?/i
     ];
 
@@ -171,10 +177,19 @@
       result.volume=volumeIssue[1]||"";
       result.issue=stripEdgePunctuation(volumeIssue[2]||"");
     }else{
-      const volumeOnly=text.match(
-        /(?:^|[,;]\s*|\s)(\d+)\s*(?=,|;|\s+\d+\s*[-–—])/
+      // (9)처럼 권 없이 호만 있는 APA 표기
+      const issueOnly=text.match(
+        /(?:^|[,;]\s*|\s)\(\s*([^)]+?)\s*\)/
       );
-      if(volumeOnly)result.volume=volumeOnly[1]||"";
+
+      if(issueOnly){
+        result.issue=stripEdgePunctuation(issueOnly[1]||"");
+      }else{
+        const volumeOnly=text.match(
+          /(?:^|[,;]\s*|\s)(\d+)\s*(?=,|;|\s+\d+\s*[-–—])/
+        );
+        if(volumeOnly)result.volume=volumeOnly[1]||"";
+      }
     }
 
     const pages=text.match(
@@ -197,10 +212,52 @@
   }
 
   function fallbackJournalAndTitle(remainder){
-    const pagePattern=
-      /,\s*(\d+)(?:\s*\(\s*([^)]+?)\s*\))?\s*,\s*(\d+)\s*[-–—]\s*(\d+)/;
+    // 1) 권(호), 페이지
+    let pagePattern=
+      /,\s*(\d+)\s*\(\s*([^)]+?)\s*\)\s*,\s*(\d+)\s*[-–—]\s*(\d+)/;
 
-    const match=remainder.match(pagePattern);
+    let match=remainder.match(pagePattern);
+    let metadata=null;
+
+    if(match){
+      metadata={
+        volume:match[1]||"",
+        issue:stripEdgePunctuation(match[2]||""),
+        startPage:match[3]||"",
+        endPage:match[4]||""
+      };
+    }else{
+      // 2) (호), 페이지 — 권이 없음
+      pagePattern=
+        /,\s*\(\s*([^)]+?)\s*\)\s*,\s*(\d+)\s*[-–—]\s*(\d+)/;
+
+      match=remainder.match(pagePattern);
+
+      if(match){
+        metadata={
+          volume:"",
+          issue:stripEdgePunctuation(match[1]||""),
+          startPage:match[2]||"",
+          endPage:match[3]||""
+        };
+      }else{
+        // 3) 권, 페이지
+        pagePattern=
+          /,\s*(\d+)\s*,\s*(\d+)\s*[-–—]\s*(\d+)/;
+
+        match=remainder.match(pagePattern);
+
+        if(match){
+          metadata={
+            volume:match[1]||"",
+            issue:"",
+            startPage:match[2]||"",
+            endPage:match[3]||""
+          };
+        }
+      }
+    }
+
     let beforeMeta=match
       ? remainder.slice(0,match.index)
       : remainder;
@@ -218,14 +275,7 @@
         title:parts.join(". "),
         journal,
         tail:match ? remainder.slice(match.index+1) : "",
-        metadata:match
-          ? {
-              volume:match[1]||"",
-              issue:stripEdgePunctuation(match[2]||""),
-              startPage:match[3]||"",
-              endPage:match[4]||""
-            }
-          : parseTail("")
+        metadata:metadata || parseTail("")
       };
     }
 
