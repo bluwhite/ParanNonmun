@@ -3,10 +3,14 @@
 
 .import-actions{display:flex;align-items:center;gap:8px;margin-top:9px}
 .import-actions .action-spacer{flex:1}
-#import-actions button{white-space:nowrap}
+.import-actions button{white-space:nowrap}
 #brCleanupBtn{font-size:12px;background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8}
 #risParseBtn{min-width:86px}
 #apaParseBtn{min-width:86px}
 .hint code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;background:#f1f5f9;padding:1px 4px;border-radius:4px}
 
 #mlaParseBtn{min-width:86px}
+
+.ai-parse-button{border-color:#a78bfa;background:#faf5ff;color:#6d28d9}
+.ai-parse-button:hover{background:#f3e8ff}
+.ai-parse-button:disabled{opacity:.45}

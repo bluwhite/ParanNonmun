@@ -92,6 +92,99 @@ async function ensureJournalInfo(){
   }
 }
 
+
+function enrichPublisherFromJournal(record){
+  if(!record?.journal)return record;
+
+  const lookup=
+    ParanApaParser.lookupPublisher(
+      record.journal
+    );
+
+  if(!lookup)return record;
+
+  record.journal=lookup.journal;
+  record.publisher=lookup.publishers[0]||"";
+  record._journalMatched=true;
+  record._publisherCandidates=[
+    ...lookup.publishers
+  ];
+
+  return record;
+}
+
+async function parseAi(){
+  const text=inputText();
+
+  if(!text){
+    clearPreview();
+    $("parseState").textContent=
+      "AI로 분석할 참고문헌을 입력하세요.";
+    return;
+  }
+
+  const button=$("aiParseBtn");
+
+  try{
+    button.disabled=true;
+    $("parseState").textContent=
+      "Groq AI가 참고문헌 형식을 판단하고 분석 중...";
+
+    const rootHandle=await loadRootHandle();
+
+    if(!rootHandle){
+      throw new Error(
+        "논문 폴더가 연결되지 않았습니다."
+      );
+    }
+
+    if(
+      !await ensurePermission(
+        rootHandle,
+        "readwrite",
+        true
+      )
+    ){
+      throw new Error(
+        "논문 폴더 읽기 권한이 필요합니다."
+      );
+    }
+
+    await ensureJournalInfo();
+
+    parsed=await ParanAiParser.parse(
+      text,
+      rootHandle
+    );
+
+    enrichPublisherFromJournal(parsed);
+    fillPreview(parsed);
+    $("addBtn").disabled=!parsed.title;
+
+    const style=
+      parsed._detectedFormat||"알 수 없음";
+
+    const count=
+      parsed._publisherCandidates?.length||0;
+
+    if(parsed._journalMatched){
+      $("parseState").textContent=
+        count>1
+          ? `AI 분석 완료 · 형식: ${style} · 학회명 후보 ${count}개 중 첫 번째 적용`
+          : `AI 분석 완료 · 형식: ${style} · 학술지 정보 일치`;
+    }else{
+      $("parseState").textContent=
+        `AI 분석 완료 · 형식: ${style}`;
+    }
+  }catch(error){
+    clearPreview();
+    $("parseState").textContent=
+      `AI 분석 실패: ${error.message}`;
+  }finally{
+    button.disabled=false;
+  }
+}
+
 function parseRis(){
   const text=inputText();
 
@@ -210,7 +303,7 @@ $("risText").addEventListener("input",()=>{
   // 입력 내용이 바뀌면 이전 분석 결과를 그대로 저장하지 못하게 한다.
   clearPreview();
   $("parseState").textContent=
-    "입력됨 · RIS, APA 또는 MLA 버튼을 누르세요.";
+    "입력됨 · AI, RIS, APA 또는 MLA 버튼을 누르세요.";
 });
 
 $("brCleanupBtn").onclick=()=>{
@@ -227,10 +320,11 @@ $("brCleanupBtn").onclick=()=>{
   textarea.value=after;
   clearPreview();
   $("parseState").textContent=
-    "BR 태그를 줄바꿈으로 변환했습니다. RIS, APA 또는 MLA 버튼을 누르세요.";
+    "BR 태그를 줄바꿈으로 변환했습니다. AI, RIS, APA 또는 MLA 버튼을 누르세요.";
   textarea.focus();
 };
 
+$("aiParseBtn").onclick=parseAi;
 $("risParseBtn").onclick=parseRis;
 $("apaParseBtn").onclick=parseApa;
 $("mlaParseBtn").onclick=parseMla;

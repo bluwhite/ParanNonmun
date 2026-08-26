@@ -25,7 +25,7 @@ async function walk(dir,prefix=""){
 
 function setFolderReady(ready){
   for(const id of [
-    "noteSearchBtn","addPaperBtn","paperFindBtn"
+    "noteSearchBtn","addPaperBtn","paperFindBtn","aiSettingsBtn"
   ]){
     const el=$(id);
     if(el)el.disabled=!ready;
@@ -105,6 +105,125 @@ async function findInSheet(){
   if(!found)alert(`"${query.trim()}"을(를) 찾지 못했습니다.`);
 }
 
+
+function setAiSettingsState(text,kind=""){
+  const el=$("aiSettingsState");
+  if(!el)return;
+  el.textContent=text;
+  el.className=`ai-settings-state ${kind}`.trim();
+}
+
+function markAiConfigured(configured){
+  const button=$("aiSettingsBtn");
+  if(!button)return;
+
+  button.classList.toggle("configured",configured);
+  button.textContent=configured ? "AI 설정 ✓" : "AI 설정";
+  button.title=configured
+    ? "현재 폴더에 AI 설정이 저장되어 있습니다."
+    : "현재 폴더의 AI 설정";
+}
+
+async function refreshAiConfigStatus(){
+  if(!rootHandle){
+    markAiConfigured(false);
+    return false;
+  }
+
+  try{
+    const configured=
+      await ParanAiConfig.hasConfig(rootHandle);
+
+    markAiConfigured(configured);
+    return configured;
+  }catch(_error){
+    markAiConfigured(false);
+    return false;
+  }
+}
+
+async function openAiSettings(){
+  if(!rootHandle){
+    alert("먼저 논문 폴더를 선택하세요.");
+    return;
+  }
+
+  const dialog=$("aiSettingsDialog");
+  const keyInput=$("aiApiKey");
+
+  keyInput.value="";
+  keyInput.type="password";
+  setAiSettingsState("설정을 불러오는 중...","saving");
+
+  try{
+    const config=await ParanAiConfig.loadConfig(rootHandle);
+
+    if(config){
+      keyInput.value=config.apiKey;
+      setAiSettingsState(
+        `Groq 설정을 불러왔습니다 · ${ParanAiConfig.MODEL}`,
+        "saved"
+      );
+    }else{
+      setAiSettingsState("Groq API Key를 입력하세요.");
+    }
+  }catch(error){
+    setAiSettingsState(error.message,"error");
+  }
+
+  dialog.showModal();
+  setTimeout(()=>keyInput.focus(),0);
+}
+
+async function saveAiSettings(){
+  if(!rootHandle)return;
+
+  const saveButton=$("aiSettingsSaveBtn");
+  saveButton.disabled=true;
+  setAiSettingsState("암호화해서 저장 중...","saving");
+
+  try{
+    if(
+      !await ensurePermission(
+        rootHandle,
+        "readwrite",
+        true
+      )
+    ){
+      throw new Error(
+        "논문 폴더 쓰기 권한이 필요합니다."
+      );
+    }
+
+    await ParanAiConfig.saveConfig(
+      rootHandle,
+      {
+        apiKey:$("aiApiKey").value
+      }
+    );
+
+    markAiConfigured(true);
+    setAiSettingsState(
+      `${ParanAiConfig.CONFIG_FILE_NAME} 저장 완료`,
+      "saved"
+    );
+
+    setTimeout(()=>{
+      if($("aiSettingsDialog").open){
+        $("aiSettingsDialog").close();
+      }
+    },350);
+  }catch(error){
+    console.error(error);
+    setAiSettingsState(
+      `저장 실패: ${error.message}`,
+      "error"
+    );
+  }finally{
+    saveButton.disabled=false;
+  }
+}
+
 async function scanPdfs(){
   pdfs=await walk(rootHandle);
   pdfs.sort((a,b)=>a.path.localeCompare(b.path,"ko"));
@@ -125,6 +244,7 @@ async function connectFolder(handle,mayPrompt=true){
   await openDataFile();
   setFolderReady(true);
   setFolderInfo(`현재 폴더: ${rootHandle.name}`,"connected");
+  refreshAiConfigStatus().catch(console.error);
 
   scanPdfs().catch(error=>{
     console.error(error);
@@ -252,6 +372,25 @@ $("addPaperBtn").onclick=async()=>{
     `width=${popupWidth},height=${popupHeight},left=${left},top=${top},resizable=yes,scrollbars=yes`
   );
 };
+
+
+$("aiSettingsBtn").onclick=openAiSettings;
+
+$("aiSettingsSaveBtn").onclick=saveAiSettings;
+
+$("aiSettingsCloseBtn").onclick=()=>{
+  $("aiSettingsDialog").close();
+};
+
+$("aiSettingsCancelBtn").onclick=()=>{
+  $("aiSettingsDialog").close();
+};
+
+$("aiSettingsDialog").addEventListener("click",event=>{
+  if(event.target===$("aiSettingsDialog")){
+    $("aiSettingsDialog").close();
+  }
+});
 
 $("chooseBtn").onclick=async()=>{
   try{
