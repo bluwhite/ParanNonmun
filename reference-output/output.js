@@ -473,6 +473,127 @@
     );
   }
 
+
+  function buildHwpCopyContainer(){
+    const sourceItems=[
+      ...$("referenceOutputArea")
+        .querySelectorAll(".reference-output-item")
+    ];
+
+    const box=document.createElement("div");
+    box.setAttribute("data-paran-hwp-copy","true");
+
+    // 한글이 브라우저 복사 내용을 해석할 때 문단/글자 서식을 더 명확히
+    // 받을 수 있도록 실제 인라인 스타일이 적용된 DOM을 만든다.
+    Object.assign(box.style,{
+      position:"fixed",
+      left:"-100000px",
+      top:"0",
+      width:"900px",
+      background:"#ffffff",
+      color:"#000000",
+      fontFamily:'"Malgun Gothic","맑은 고딕",Arial,sans-serif',
+      fontSize:"11pt",
+      lineHeight:"1.6",
+      whiteSpace:"normal"
+    });
+
+    for(const source of sourceItems){
+      const p=document.createElement("p");
+
+      Object.assign(p.style,{
+        margin:"0 0 0.65em 0",
+        padding:"0",
+        fontStyle:"normal",
+        fontWeight:"normal"
+      });
+
+      p.innerHTML=source.innerHTML;
+
+      // <em>/<i> 태그에만 의존하지 않고 실제 style 속성도 넣는다.
+      for(const italic of p.querySelectorAll("em,i")){
+        italic.style.fontStyle="italic";
+        italic.style.fontWeight="inherit";
+      }
+
+      p.querySelectorAll("*").forEach(element=>{
+        if(
+          getComputedStyle(element).fontStyle==="italic"
+        ){
+          element.style.fontStyle="italic";
+        }
+      });
+
+      box.append(p);
+    }
+
+    return box;
+  }
+
+  async function copyForHwp(){
+    const plain=plainOutputText();
+
+    if(!plain){
+      setState(
+        "복사할 참고문헌이 없습니다.",
+        "error"
+      );
+      return;
+    }
+
+    const box=buildHwpCopyContainer();
+    document.body.append(box);
+
+    const selection=window.getSelection();
+    const savedRanges=[];
+
+    try{
+      if(selection){
+        for(let i=0;i<selection.rangeCount;i++){
+          savedRanges.push(
+            selection.getRangeAt(i).cloneRange()
+          );
+        }
+      }
+
+      const range=document.createRange();
+      range.selectNodeContents(box);
+
+      selection.removeAllRanges();
+      selection.addRange(range);
+
+      const ok=document.execCommand("copy");
+
+      if(!ok){
+        throw new Error(
+          "브라우저가 한글용 서식 복사를 허용하지 않았습니다."
+        );
+      }
+
+      setState(
+        "한글용 복사 완료 · 아래한글에서 Ctrl+V로 붙여 넣으세요.",
+        "saved"
+      );
+    }catch(error){
+      console.error(error);
+
+      setState(
+        `한글용 복사 실패: ${error.message}`,
+        "error"
+      );
+    }finally{
+      try{
+        selection.removeAllRanges();
+
+        for(const oldRange of savedRanges){
+          selection.addRange(oldRange);
+        }
+      }catch(_e){}
+
+      box.remove();
+    }
+  }
+
   async function fallbackRichCopy(){
     const area=$("referenceOutputArea");
     const selection=window.getSelection();
@@ -622,6 +743,7 @@
     $("referenceSortBtn").onclick=sortKoreanFirst;
     $("referenceSheetOrderBtn").onclick=restoreSheetOrder;
     $("referenceCopyBtn").onclick=copyRich;
+    $("referenceHwpCopyBtn").onclick=copyForHwp;
     $("referencePlainCopyBtn").onclick=copyPlain;
     $("referenceOutputCloseBtn").onclick=close;
     $("referenceOutputCloseIconBtn").onclick=close;
