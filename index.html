@@ -40,30 +40,17 @@
       </div>
       <div class="paper-actions">
         <input id="paperSearchBox" type="search" placeholder="목록 검색">
+        <button id="addColumnBtn" disabled>열 추가</button>
         <button id="addPaperBtn" class="primary" disabled>논문 추가</button>
       </div>
     </div>
     <div class="save-line">
+      <span class="column-hint">열 제목을 드래그하면 순서를 바꿀 수 있습니다.</span>
       <span id="saveState" class="save-state">폴더를 선택하세요.</span>
     </div>
     <div class="paper-table-wrap">
       <table class="paper-table">
-        <thead>
-          <tr>
-            <th>확인(*)</th>
-            <th>저자</th>
-            <th>출판연도</th>
-            <th>논문명</th>
-            <th>학술지명</th>
-            <th>권</th>
-            <th>호</th>
-            <th>학회명</th>
-            <th>시작페이지</th>
-            <th>끝페이지</th>
-            <th>메모</th>
-            <th>PDF</th>
-          </tr>
-        </thead>
+        <thead id="paperHead"></thead>
         <tbody id="paperBody">
           <tr><td colspan="12" class="empty">논문 폴더를 선택하세요.</td></tr>
         </tbody>
