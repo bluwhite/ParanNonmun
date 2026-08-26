@@ -70,50 +70,79 @@
   <div class="format-manager-shell">
     <div class="format-manager-head">
       <div>
-        <h2>참고문헌 형식 관리</h2>
-        <p>기존 Excel의 <code>out_set</code>에 해당합니다. 출력 템플릿과 이탤릭 항목을 저장합니다.</p>
+        <h2>참고문헌 양식 관리</h2>
+        <p>
+          기존 Excel의 <code>out_set</code>을 그룹 단위로 관리합니다.
+          템플릿에서 글자를 선택한 뒤 <strong>Ctrl+I</strong>로 이탤릭을 적용할 수 있습니다.
+        </p>
       </div>
       <button id="formatCloseIconBtn" type="button" class="icon-button" aria-label="닫기">×</button>
     </div>
 
     <div class="format-manager-body">
       <aside class="format-list-pane">
-        <div class="format-pane-title">저장된 형식</div>
-        <div id="formatList" class="format-list"></div>
+        <div class="format-pane-title">양식 그룹</div>
+        <div id="formatGroupList" class="format-list"></div>
 
         <div class="format-list-actions">
-          <button id="formatNewBtn" type="button">새 형식</button>
-          <button id="formatDuplicateBtn" type="button">복제</button>
-          <button id="formatDeleteBtn" type="button">삭제</button>
+          <button id="formatGroupNewBtn" type="button">추가</button>
+          <button id="formatGroupDuplicateBtn" type="button">복제</button>
+          <button id="formatGroupDeleteBtn" type="button">삭제</button>
         </div>
       </aside>
 
       <section class="format-editor-pane">
         <label class="format-field">
-          <span>형식 이름</span>
-          <input id="formatNameInput" type="text" autocomplete="off">
+          <span>양식 그룹 이름</span>
+          <input id="formatGroupNameInput" type="text" autocomplete="off">
         </label>
 
-        <label class="format-field">
-          <span>템플릿</span>
-          <textarea id="formatTemplateInput" rows="4" spellcheck="false"></textarea>
-        </label>
+        <div class="format-template-list">
+          <div class="format-template-row">
+            <div class="format-template-label">학회지_국내</div>
+            <div class="format-template-editor" data-format-key="journalKo"
+                 contenteditable="true" spellcheck="false"></div>
+          </div>
 
-        <div class="format-subsection">
-          <div class="format-subsection-title">코드 삽입</div>
-          <div id="formatTokenButtons" class="format-token-buttons"></div>
-          <div class="format-help">
-            버튼을 누르면 현재 커서 위치에 코드를 넣습니다.
-            일반 문자·괄호·따옴표·구두점은 템플릿에서 자유롭게 수정할 수 있습니다.
+          <div class="format-template-row">
+            <div class="format-template-label">학위_국내</div>
+            <div class="format-template-editor" data-format-key="thesisKo"
+                 contenteditable="true" spellcheck="false"></div>
+          </div>
+
+          <div class="format-template-row">
+            <div class="format-template-label">단행본_국내</div>
+            <div class="format-template-editor" data-format-key="bookKo"
+                 contenteditable="true" spellcheck="false"></div>
+          </div>
+
+          <div class="format-template-row">
+            <div class="format-template-label">학회지_해외</div>
+            <div class="format-template-editor" data-format-key="journalEn"
+                 contenteditable="true" spellcheck="false"></div>
+          </div>
+
+          <div class="format-template-row">
+            <div class="format-template-label">학위_해외</div>
+            <div class="format-template-editor" data-format-key="thesisEn"
+                 contenteditable="true" spellcheck="false"></div>
+          </div>
+
+          <div class="format-template-row">
+            <div class="format-template-label">단행본_해외</div>
+            <div class="format-template-editor" data-format-key="bookEn"
+                 contenteditable="true" spellcheck="false"></div>
           </div>
         </div>
 
-        <div class="format-subsection">
-          <div class="format-subsection-title">이탤릭 적용</div>
-          <div id="formatItalicTokens" class="format-italic-grid"></div>
-          <div class="format-help">
-            체크한 코드가 실제 참고문헌으로 출력될 때 이탤릭체를 적용합니다.
-          </div>
+        <div class="format-editor-note">
+          템플릿 문자는 직접 수정합니다. 이탤릭이 필요한 부분은 텍스트를 선택하고
+          <strong>Ctrl+I</strong>를 누르면 템플릿 자체에 서식으로 저장됩니다.
+        </div>
+
+        <div class="format-code-guide">
+          <div class="format-subsection-title">템플릿 코드 안내</div>
+          <div id="formatCodeHelp" class="format-code-help"></div>
         </div>
       </section>
     </div>

@@ -3,7 +3,7 @@
   "use strict";
 
   const DATA_FILE_NAME = "파란논문.json";
-  const SCHEMA_VERSION = 4;
+  const SCHEMA_VERSION = 5;
   const MANAGED_SHEET_ID = "paran-paper-list";
 
   const SYSTEM_COLUMNS = [
@@ -24,136 +24,177 @@
   const PAPER_FIELDS = SYSTEM_COLUMNS.map(c=>c.field);
 
 
-  const REFERENCE_FORMAT_TOKENS = [
-    {token:"AU",label:"저자"},
-    {token:"PY",label:"출판연도"},
-    {token:"TI",label:"논문명"},
-    {token:"JO",label:"학술지명"},
-    {token:"VL",label:"권"},
-    {token:"IS",label:"호"},
-    {token:"PB",label:"학회명/발행기관"},
-    {token:"SP",label:"시작페이지"},
-    {token:"EP",label:"끝페이지"},
-    {token:"VL+IS",label:"권·호(국내식)"},
-    {token:"VL(IS)",label:"권(호)"}
+  const REFERENCE_FORMAT_ITEMS = [
+    {key:"journalKo",label:"학회지_국내"},
+    {key:"thesisKo", label:"학위_국내"},
+    {key:"bookKo",   label:"단행본_국내"},
+    {key:"journalEn",label:"학회지_해외"},
+    {key:"thesisEn", label:"학위_해외"},
+    {key:"bookEn",   label:"단행본_해외"}
   ];
 
-  const REFERENCE_FORMAT_TOKEN_SET =
-    new Set(REFERENCE_FORMAT_TOKENS.map(item=>item.token));
+  const REFERENCE_TEMPLATE_CODES = [
+    {code:"AU",label:"저자"},
+    {code:"PY",label:"출판연도"},
+    {code:"TI",label:"논문명"},
+    {code:"JO",label:"학술지명"},
+    {code:"VL",label:"권"},
+    {code:"IS",label:"호"},
+    {code:"PB",label:"학회명/발행기관"},
+    {code:"SP",label:"시작페이지"},
+    {code:"EP",label:"끝페이지"},
+    {code:"VL+IS",label:"국내식 권·호"},
+    {code:"VL(IS)",label:"권(호)"},
+    {code:"VL/IS",label:"권/호"}
+  ];
 
-  const DEFAULT_REFERENCE_FORMATS = [
+  // 기존 Excel out_set의 아래쪽 세 묶음을 그대로 옮긴 기본값.
+  // 이탤릭은 템플릿 HTML 자체의 <em>...</em>으로 보존한다.
+  const DEFAULT_REFERENCE_FORMAT_GROUPS = [
     {
-      id:"journal-ko",
-      name:"학회지_국내",
-      template:"AU(PY), 「TI」, 『JO』 VL+IS, PB, pp.SP-EP.",
-      italicTokens:[]
+      id:"format-group-kyunghee",
+      name:"경사대양식",
+      formats:{
+        journalKo:"AU(PY), 「TI」, 『JO』 VL+IS, PB, pp.SP-EP.",
+        thesisKo:"AU(PY), 「TI」, JO.",
+        bookKo:"AU(PY), 「TI」, JO.",
+        journalEn:"AU(PY), TI, <em>JO</em> VL+IS, SP-EP.",
+        thesisEn:"AU(PY), <em>TI</em>, JO.",
+        bookEn:"AU(PY), <em>TI</em>, JO."
+      }
     },
     {
-      id:"thesis-ko",
-      name:"학위_국내",
-      template:"AU(PY), 「TI」, JO.",
-      italicTokens:[]
+      id:"format-group-1",
+      name:"양식1",
+      formats:{
+        journalKo:"AU. (PY). TI. JO, VL/IS, SP-EP.",
+        thesisKo:"AU. (PY). TI. JO.",
+        bookKo:"AU. (PY). TI. JO.",
+        journalEn:"AU. (PY), TI, <em>JO</em> VL+IS, SP-EP.",
+        thesisEn:"AU. (PY), <em>TI</em>, JO.",
+        bookEn:"AU. (PY), <em>TI</em>, JO."
+      }
     },
     {
-      id:"book-ko",
-      name:"단행본_국내",
-      template:"AU(PY), 「TI」, JO.",
-      italicTokens:[]
-    },
-    {
-      id:"journal-en",
-      name:"학회지_해외",
-      template:"AU(PY), TI, JO VL+IS, SP-EP.",
-      italicTokens:["JO"]
-    },
-    {
-      id:"thesis-en",
-      name:"학위_해외",
-      template:"AU(PY), TI, JO.",
-      italicTokens:["TI"]
-    },
-    {
-      id:"book-en",
-      name:"단행본_해외",
-      template:"AU(PY), TI, JO.",
-      italicTokens:["TI"]
+      id:"format-group-2",
+      name:"양식2",
+      formats:{
+        journalKo:"AU(PY), &quot;TI&quot;, JO, VL/IS, SP-EP쪽.",
+        thesisKo:"AU(PY), &quot;TI&quot;, JO.",
+        bookKo:"AU(PY), TI, JO.",
+        journalEn:"AU(PY), TI, <em>JO</em> VL+IS, SP-EP.",
+        thesisEn:"AU(PY), <em>TI</em>, JO.",
+        bookEn:"AU(PY), <em>TI</em>, JO."
+      }
     }
   ];
 
-  function cloneDefaultReferenceFormats(){
-    return DEFAULT_REFERENCE_FORMATS.map(format=>({
-      ...format,
-      italicTokens:[...format.italicTokens]
+  function cloneDefaultReferenceFormatGroups(){
+    return DEFAULT_REFERENCE_FORMAT_GROUPS.map(group=>({
+      id:group.id,
+      name:group.name,
+      formats:{...group.formats}
     }));
   }
 
-  function normalizeReferenceFormatName(name){
+  function normalizeReferenceFormatGroupName(name){
     return String(name??"")
       .normalize("NFKC")
       .trim()
       .toLocaleLowerCase();
   }
 
-  function normalizeReferenceFormat(raw={}){
-    const id=String(raw.id||"").trim() || newId("ref-format");
-    const name=String(raw.name||"").normalize("NFKC").trim();
-    const template=String(raw.template||"")
-      .replace(/\r\n?/g,"\n")
+  function sanitizeTemplateHtml(value){
+    let html=String(value??"")
+      .replace(/\r\n?/g," ")
+      .replace(/<br\s*\/?>/gi," ")
+      .replace(/<\/?(?:div|p|section|article|li|ul|ol|h[1-6])[^>]*>/gi," ")
+      .replace(/<i(?:\s[^>]*)?>/gi,"<em>")
+      .replace(/<\/i>/gi,"</em>")
+      .replace(/<em(?:\s[^>]*)?>/gi,"<em>");
+
+    // 템플릿에는 텍스트와 이탤릭 표시만 저장한다.
+    html=html.replace(/<(?!\/?em\b)[^>]*>/gi,"");
+    html=html.replace(/&nbsp;/gi," ");
+    html=html.replace(/[ \t\f\v]+/g," ").trim();
+
+    return html;
+  }
+
+  function templateText(html){
+    return String(html??"")
+      .replace(/<[^>]+>/g,"")
+      .replace(/&quot;/g,'"')
+      .replace(/&apos;/g,"'")
+      .replace(/&lt;/g,"<")
+      .replace(/&gt;/g,">")
+      .replace(/&amp;/g,"&")
       .trim();
+  }
 
-    const italicTokens=[];
-    const seen=new Set();
+  function normalizeReferenceFormatGroup(raw={},fallback=null){
+    const base=fallback || DEFAULT_REFERENCE_FORMAT_GROUPS[0];
+    const sourceFormats=
+      raw && typeof raw.formats==="object"
+        ? raw.formats
+        : {};
 
-    for(const token of Array.isArray(raw.italicTokens) ? raw.italicTokens : []){
-      const clean=String(token||"").trim();
+    const formats={};
 
-      if(
-        REFERENCE_FORMAT_TOKEN_SET.has(clean) &&
-        !seen.has(clean)
-      ){
-        italicTokens.push(clean);
-        seen.add(clean);
+    for(const item of REFERENCE_FORMAT_ITEMS){
+      let value=sourceFormats[item.key];
+
+      // 초기 실험 버전이나 수동 JSON에서 {html:"..."} 형태도 허용.
+      if(value && typeof value==="object" && "html" in value){
+        value=value.html;
       }
+
+      if(value===undefined || value===null || String(value).trim()===""){
+        value=base.formats[item.key] || "";
+      }
+
+      formats[item.key]=sanitizeTemplateHtml(value);
     }
 
     return {
-      id,
-      name,
-      template,
-      italicTokens
+      id:String(raw.id||"").trim() || newId("ref-group"),
+      name:String(raw.name||"").normalize("NFKC").trim(),
+      formats
     };
   }
 
-  function normalizeReferenceFormats(formats){
-    if(!Array.isArray(formats))return cloneDefaultReferenceFormats();
+  function normalizeReferenceFormatGroups(groups){
+    if(!Array.isArray(groups) || !groups.length){
+      return cloneDefaultReferenceFormatGroups();
+    }
 
     const result=[];
-    const usedIds=new Set();
-    const usedNames=new Set();
+    const ids=new Set();
+    const names=new Set();
 
-    for(const raw of formats){
-      const format=normalizeReferenceFormat(raw);
+    for(const raw of groups){
+      const group=normalizeReferenceFormatGroup(raw);
+      const nameKey=normalizeReferenceFormatGroupName(group.name);
 
-      if(!format.name || !format.template)continue;
+      if(!nameKey || names.has(nameKey))continue;
 
-      let id=format.id;
-      while(usedIds.has(id)){
-        id=newId("ref-format");
+      let id=group.id;
+      while(ids.has(id)){
+        id=newId("ref-group");
       }
 
-      const nameKey=normalizeReferenceFormatName(format.name);
-      if(!nameKey || usedNames.has(nameKey))continue;
-
       result.push({
-        ...format,
+        ...group,
         id
       });
 
-      usedIds.add(id);
-      usedNames.add(nameKey);
+      ids.add(id);
+      names.add(nameKey);
     }
 
-    return result;
+    return result.length
+      ? result
+      : cloneDefaultReferenceFormatGroups();
   }
 
   function newId(prefix="paper"){
@@ -250,7 +291,7 @@
       columns:cloneSystemColumns(),
       papers:[],
       sheetSnapshot:null,
-      referenceFormats:cloneDefaultReferenceFormats()
+      referenceFormatGroups:cloneDefaultReferenceFormatGroups()
     };
   }
 
@@ -267,9 +308,9 @@
         ? data.sheetSnapshot
         : null;
 
-      if(Object.prototype.hasOwnProperty.call(data,"referenceFormats")){
-        normalized.referenceFormats=
-          normalizeReferenceFormats(data.referenceFormats);
+      if(Object.prototype.hasOwnProperty.call(data,"referenceFormatGroups")){
+        normalized.referenceFormatGroups=
+          normalizeReferenceFormatGroups(data.referenceFormatGroups);
       }
     }
 
@@ -374,7 +415,11 @@
         throw new Error(`${DATA_FILE_NAME} 파일을 읽을 수 없습니다. JSON 형식을 확인하세요.`);
       }
 
-      const needsMigration=Number(parsed?.schemaVersion||0)<SCHEMA_VERSION;
+      const needsMigration=
+        Number(parsed?.schemaVersion||0)<SCHEMA_VERSION ||
+        !Array.isArray(parsed?.referenceFormatGroups) ||
+        !parsed.referenceFormatGroups.length;
+
       this.data=normalizeData(parsed);
 
       if(needsMigration)await this.save(this.data);
@@ -434,12 +479,15 @@
     normalizeColumnName,
     createCustomColumn,
     hasDuplicateColumnName,
-    REFERENCE_FORMAT_TOKENS,
-    DEFAULT_REFERENCE_FORMATS,
-    cloneDefaultReferenceFormats,
-    normalizeReferenceFormat,
-    normalizeReferenceFormats,
-    normalizeReferenceFormatName,
+    REFERENCE_FORMAT_ITEMS,
+    REFERENCE_TEMPLATE_CODES,
+    DEFAULT_REFERENCE_FORMAT_GROUPS,
+    cloneDefaultReferenceFormatGroups,
+    normalizeReferenceFormatGroup,
+    normalizeReferenceFormatGroups,
+    normalizeReferenceFormatGroupName,
+    sanitizeTemplateHtml,
+    templateText,
     cellText,
     findManagedSheet
   };

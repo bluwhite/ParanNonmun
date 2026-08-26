@@ -898,16 +898,16 @@
   }
 
 
-  function setReferenceFormats(formats){
+  function setReferenceFormatGroups(groups){
     if(!currentData)return [];
 
     currentData={
       ...currentData,
-      referenceFormats:
-        global.ParanPaperData.normalizeReferenceFormats(formats)
+      referenceFormatGroups:
+        global.ParanPaperData.normalizeReferenceFormatGroups(groups)
     };
 
-    return currentData.referenceFormats;
+    return currentData.referenceFormatGroups;
   }
 
   async function flush(){
@@ -942,7 +942,7 @@
     findNext,
     getColumnHeaders,
     appendImportedRows,
-    setReferenceFormats,
+    setReferenceFormatGroups,
     getSelectedRowContext,
     setSystemFieldAtRow,
     getData

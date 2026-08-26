@@ -109,36 +109,35 @@ async function findInSheet(){
 
 
 
-async function saveReferenceFormats(formats){
+async function saveReferenceFormatGroups(groups){
   if(!dataStore || !rootHandle){
     throw new Error("먼저 논문 폴더를 선택하세요.");
   }
 
-  // 시트의 최신 편집 내용을 먼저 파란논문.json에 반영한다.
   const synced=await ParanPaperSheet.flush();
   if(synced)paperData=synced;
 
   paperData={
     ...paperData,
-    referenceFormats:
-      ParanPaperData.normalizeReferenceFormats(formats)
+    referenceFormatGroups:
+      ParanPaperData.normalizeReferenceFormatGroups(groups)
   };
 
   await dataStore.save(paperData);
   paperData=dataStore.data;
 
-  // 이후 시트 셀 편집 저장이 일어나도 referenceFormats가 사라지지 않도록
-  // Univer 모듈 내부 currentData도 같은 값으로 갱신한다.
-  ParanPaperSheet.setReferenceFormats(
-    paperData.referenceFormats
+  // 이후 시트 셀을 편집해 저장해도 양식 그룹이 사라지지 않도록
+  // Univer 내부 currentData에도 같은 값을 유지한다.
+  ParanPaperSheet.setReferenceFormatGroups(
+    paperData.referenceFormatGroups
   );
 
   setSaveState(
-    `참고문헌 형식 저장됨 · ${paperData.referenceFormats.length}개`,
+    `참고문헌 양식 저장됨 · ${paperData.referenceFormatGroups.length}개 그룹`,
     "saved"
   );
 
-  return paperData.referenceFormats;
+  return paperData.referenceFormatGroups;
 }
 
 async function openReferenceFormatManager(){
@@ -148,18 +147,19 @@ async function openReferenceFormatManager(){
   }
 
   try{
-    // 형식 관리 창을 띄우기 전에 현재 시트를 먼저 동기화한다.
     const synced=await ParanPaperSheet.flush();
     if(synced)paperData=synced;
 
     ParanReferenceFormatManager.open({
-      formats:paperData.referenceFormats,
-      onSave:saveReferenceFormats
+      groups:paperData.referenceFormatGroups,
+      onSave:saveReferenceFormatGroups
     });
   }catch(error){
     console.error(error);
+
     const message=
-      `참고문헌 형식 관리 오류: ${error.message}`;
+      `참고문헌 양식 관리 오류: ${error.message}`;
+
     setSaveState(message,"error");
     alert(message);
   }
