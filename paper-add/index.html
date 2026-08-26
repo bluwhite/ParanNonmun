@@ -9,21 +9,36 @@
 <body>
 <main class="add-wrap">
   <header class="add-head">
-    <div><div class="eyebrow">RIS Import</div><h1>논문 추가</h1><p>RIS 내용을 붙여 넣으면 아래 항목으로 자동 분리됩니다.</p></div>
+    <div>
+      <div class="eyebrow">REFERENCE IMPORT</div>
+      <h1>논문 추가</h1>
+      <p>참고문헌 정보를 붙여 넣은 뒤 RIS 또는 APA 형식을 선택하세요.</p>
+    </div>
     <span id="versionBadge" class="version"></span>
   </header>
 
   <section class="panel">
-    <div class="ris-label-row">
-      <label class="label" for="risText">RIS 내용</label>
+    <label class="label" for="risText">참고문헌 정보</label>
+    <textarea id="risText" autofocus placeholder="RIS 또는 APA 참고문헌 정보를 붙여 넣으세요."></textarea>
+
+    <div class="import-actions">
       <button id="brCleanupBtn" type="button">BR 줄바꿈 정리</button>
+      <span class="action-spacer"></span>
+      <button id="risParseBtn" type="button">RIS</button>
+      <button id="apaParseBtn" type="button" class="primary">APA</button>
     </div>
-    <textarea id="risText" autofocus placeholder="TY  - JOUR&#10;AU  - Kim, J. S.&#10;PY  - 2026&#10;TI  - ...&#10;ER  -"></textarea>
-    <div class="hint">붙여 넣으면 자동으로 분석합니다. HTML의 &lt;br /&gt;가 섞여 있으면 ‘BR 줄바꿈 정리’를 누르세요.</div>
+
+    <div class="hint">
+      RIS는 RIS 태그를 분석하고, APA는 학술지명을 추출한 뒤
+      <code>reference-data/journal-info.json</code>에서 학회명을 찾아 입력합니다.
+    </div>
   </section>
 
   <section class="panel">
-    <div class="preview-head"><h2>추가될 정보</h2><span id="parseState">RIS 대기 중</span></div>
+    <div class="preview-head">
+      <h2>추가될 정보</h2>
+      <span id="parseState">입력 대기 중</span>
+    </div>
     <div id="previewGrid" class="preview-grid"></div>
   </section>
 
@@ -36,6 +51,7 @@
 <script src="../shared.js"></script>
 <script src="../paper-data/data-store.js"></script>
 <script src="../reference-import/ris-parser.js"></script>
+<script src="../reference-import/apa-parser.js"></script>
 <script src="./add.js"></script>
 </body>
 </html>

@@ -231,8 +231,26 @@ $("noteQuery").addEventListener("keydown",event=>{
 
 $("addPaperBtn").onclick=async()=>{
   await saveNow().catch(()=>{});
+
   const u=new URL("./paper-add/index.html",location.href);
-  window.open(u.toString(),"paran-paper-add","width=980,height=860,resizable=yes,scrollbars=yes");
+
+  const popupWidth=980;
+  const popupHeight=860;
+  const parentLeft=Number.isFinite(window.screenX) ? window.screenX : window.screenLeft;
+  const parentTop=Number.isFinite(window.screenY) ? window.screenY : window.screenTop;
+  const parentWidth=window.outerWidth || document.documentElement.clientWidth || popupWidth;
+  const parentHeight=window.outerHeight || document.documentElement.clientHeight || popupHeight;
+
+  // 현재 파란 논문 창의 가로 중앙에 맞추고,
+  // 세로 위치는 현재 창 상단에서 약 10% 내려온 곳에 둔다.
+  const left=Math.round(parentLeft+(parentWidth-popupWidth)/2);
+  const top=Math.round(parentTop+parentHeight*0.10);
+
+  window.open(
+    u.toString(),
+    "paran-paper-add",
+    `width=${popupWidth},height=${popupHeight},left=${left},top=${top},resizable=yes,scrollbars=yes`
+  );
 };
 
 $("chooseBtn").onclick=async()=>{
