@@ -574,65 +574,18 @@
   }
 
 
-  function buildNativeCopyBox(){
+  function visibleOutputNativeCopy(){
+    const area=$("referenceOutputArea");
     const items=[
-      ...$("referenceOutputArea")
-        .querySelectorAll(".reference-output-item")
+      ...area.querySelectorAll(".reference-output-item")
     ];
 
-    const box=document.createElement("div");
-    box.setAttribute("data-paran-native-copy","true");
-
-    Object.assign(box.style,{
-      position:"fixed",
-      left:"-100000px",
-      top:"0",
-      width:"720px",
-      background:"#ffffff",
-      color:"#000000",
-      padding:"0",
-      margin:"0"
-    });
-
-    for(const item of items){
-      const content=
-        item.querySelector(".reference-output-content");
-
-      let style;
-      try{
-        style=JSON.parse(
-          item.dataset.referenceStyle || "{}"
-        );
-      }catch(_e){
-        style={};
-      }
-
-      const row=document.createElement("div");
-      row.setAttribute(
-        "style",
-        referenceStyleCss(style)
-      );
-
-      const text=document.createElement("span");
-      text.setAttribute(
-        "style",
-        referenceTextCss(style)
-      );
-      text.innerHTML=normalizeItalicHtml(
-        content?.innerHTML || ""
-      );
-
-      row.append(text);
-      box.append(row);
+    if(!items.length){
+      throw new Error("복사할 참고문헌이 없습니다.");
     }
 
-    return box;
-  }
-
-  function nativeRichCopy(){
-    const box=buildNativeCopyBox();
-    document.body.append(box);
-
+    // 성공했던 독립 테스트 페이지의 fallback과 같은 방식:
+    // 숨은 DOM을 만들지 않고 실제 화면에 보이는 출력 영역을 직접 선택해서 복사한다.
     const selection=window.getSelection();
     const savedRanges=[];
 
@@ -645,8 +598,17 @@
         }
       }
 
+      const first=
+        items[0].querySelector(".reference-output-content") ||
+        items[0];
+
+      const last=
+        items[items.length-1].querySelector(".reference-output-content") ||
+        items[items.length-1];
+
       const range=document.createRange();
-      range.selectNodeContents(box);
+      range.setStartBefore(first);
+      range.setEndAfter(last);
 
       selection.removeAllRanges();
       selection.addRange(range);
@@ -655,18 +617,17 @@
 
       if(!ok){
         throw new Error(
-          "브라우저 native rich copy 실패"
+          "브라우저가 화면 영역의 서식 복사를 허용하지 않았습니다."
         );
       }
     }finally{
       try{
         selection.removeAllRanges();
+
         for(const oldRange of savedRanges){
           selection.addRange(oldRange);
         }
       }catch(_e){}
-
-      box.remove();
     }
   }
 
@@ -709,9 +670,10 @@
     }
 
     try{
-      // 테스트 HTML에서 서식 보존이 잘 되었던 경로와 동일하게
-      // 실제 렌더링 DOM을 선택하여 native copy를 우선 사용한다.
-      nativeRichCopy();
+      // v0.13.4:
+      // 성공했던 샘플과 동일하게 실제 보이는 출력 DOM을 직접 선택해 copy.
+      // 이 경로가 Word/아래한글의 HTML Format 생성에 가장 잘 맞는다.
+      visibleOutputNativeCopy();
 
       setState(
         "서식 포함 복사 완료 · Word는 Ctrl+V, 아래한글은 반드시 Ctrl+Alt+V → 인터넷 문서로 붙여 넣으세요.",
@@ -719,7 +681,7 @@
       );
     }catch(nativeError){
       console.warn(
-        "native rich copy 실패, ClipboardItem으로 재시도:",
+        "화면 영역 native copy 실패, ClipboardItem으로 재시도:",
         nativeError
       );
 
