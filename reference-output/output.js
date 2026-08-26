@@ -1,4 +1,4 @@
-/* 파란 논문 v0.13.5 - Word/아래한글 분리 복사 */
+/* 파란 논문 v0.13.6 - Word/아래한글 서식 매핑 보정 */
 (function(global){
   "use strict";
 
@@ -184,8 +184,16 @@
   }
 
   function cssFontFamily(value){
-    const name=clean(value) || "바탕";
+    const name=clean(value) || "HCR Dotum";
     const escaped=name.replace(/["\\]/g,"");
+
+    if(/^HCR Dotum$/i.test(name) || name==="함초롬돋움"){
+      return '"HCR Dotum","함초롬돋움","Malgun Gothic",sans-serif';
+    }
+
+    if(/^HCR Batang$/i.test(name) || name==="함초롬바탕"){
+      return '"HCR Batang","함초롬바탕","Batang","바탕",serif';
+    }
 
     const fallback=
       /바탕|serif|times/i.test(name)
@@ -203,20 +211,39 @@
       Number(s.hangingIndentPt)||0
     );
 
-    const paragraphLeft=
+    const firstLineLeft=
       Math.max(
         0,
         Number(s.leftIndentPt)||0
-      )+hanging;
+      );
+
+    // Word/CSS의 hanging indent 표현:
+    // 본문 왼쪽 위치 = 첫 줄 시작 위치 + hanging
+    const wordParagraphLeft=
+      firstLineLeft+hanging;
+
+    const fontSizePt=
+      Math.max(
+        1,
+        Number(s.fontSizePt)||10
+      );
+
+    const linePercent=
+      Math.max(
+        80,
+        Number(s.lineHeightPercent)||100
+      );
 
     return {
       s,
       hanging,
-      paragraphLeft,
-      lineRatio:Math.max(
-        0.8,
-        Number(s.lineHeightPercent||100)/100
-      ),
+      firstLineLeft,
+      wordParagraphLeft,
+      fontSizePt,
+      linePercent,
+      lineRatio:linePercent/100,
+      lineHeightPt:
+        fontSizePt*(linePercent/100),
       letterSpacingEm:
         Number(s.letterSpacingPercent||0)/100
     };
@@ -226,7 +253,7 @@
     const {
       s,
       hanging,
-      paragraphLeft,
+      wordParagraphLeft,
       lineRatio,
       letterSpacingEm
     }=referenceMetrics(style);
@@ -240,7 +267,7 @@
       `margin-top:${s.spaceBeforePt}pt`,
       `margin-right:${s.rightIndentPt}pt`,
       `margin-bottom:${s.spaceAfterPt}pt`,
-      `margin-left:${paragraphLeft}pt`,
+      `margin-left:${wordParagraphLeft}pt`,
       "padding:0",
       `text-indent:-${hanging}pt`,
       `text-align:${s.alignment}`,
@@ -252,21 +279,30 @@
     const {
       s,
       hanging,
-      paragraphLeft,
-      lineRatio,
+      firstLineLeft,
+      lineHeightPt,
       letterSpacingEm
     }=referenceMetrics(style);
 
+    // 아래한글의 인터넷 문서 import는 Word와 달리
+    // margin-left / text-indent를 비교적 직접 문단 값으로 읽는 경향을 이용한다.
+    // 따라서 한글 설정값 그대로:
+    //   왼쪽 여백 6pt
+    //   내어쓰기 30pt
+    // 를 전달한다.
+    //
+    // 줄간격 180%는 비율 대신 실제 18pt(10pt × 1.8)로 강제해
+    // HTML import 과정에서 무시되는 것을 줄인다.
     return [
       `font-family:${cssFontFamily(s.fontFamily)}`,
       `font-size:${s.fontSizePt}pt`,
       `font-stretch:${s.fontScalePercent}%`,
       `letter-spacing:${letterSpacingEm}em`,
-      `line-height:${lineRatio}`,
+      `line-height:${lineHeightPt}pt`,
       `margin-top:${s.spaceBeforePt}pt`,
       `margin-right:${s.rightIndentPt}pt`,
       `margin-bottom:${s.spaceAfterPt}pt`,
-      `margin-left:${paragraphLeft}pt`,
+      `margin-left:${firstLineLeft}pt`,
       "padding:0",
       `text-indent:-${hanging}pt`,
       `text-align:${s.alignment}`,
@@ -278,21 +314,23 @@
     const {
       s,
       hanging,
-      paragraphLeft,
-      lineRatio
+      wordParagraphLeft,
+      lineHeightPt
     }=referenceMetrics(style);
 
+    // Word에서는 시각적 180%를 확실하게 만들기 위해
+    // 10pt 기준 18pt의 Exactly line spacing으로 넘긴다.
     return [
       `margin-top:${s.spaceBeforePt}pt`,
       `margin-right:${s.rightIndentPt}pt`,
       `margin-bottom:${s.spaceAfterPt}pt`,
-      `margin-left:${paragraphLeft}pt`,
+      `margin-left:${wordParagraphLeft}pt`,
       `mso-margin-top-alt:${s.spaceBeforePt}pt`,
       `mso-margin-bottom-alt:${s.spaceAfterPt}pt`,
       "padding:0",
       `text-indent:-${hanging}pt`,
-      `line-height:${lineRatio}`,
-      "mso-line-height-rule:auto",
+      `line-height:${lineHeightPt}pt`,
+      "mso-line-height-rule:exactly",
       `text-align:${s.alignment}`,
       "mso-pagination:widow-orphan"
     ].join(";");
@@ -304,8 +342,13 @@
       letterSpacingEm
     }=referenceMetrics(style);
 
+    const family=cssFontFamily(s.fontFamily);
+
     return [
-      `font-family:${cssFontFamily(s.fontFamily)}`,
+      `font-family:${family}`,
+      `mso-fareast-font-family:${family}`,
+      `mso-ascii-font-family:${family}`,
+      `mso-hansi-font-family:${family}`,
       `font-size:${s.fontSizePt}pt`,
       `font-stretch:${s.fontScalePercent}%`,
       `letter-spacing:${letterSpacingEm}em`,
@@ -650,7 +693,7 @@
     );
   }
 
-  function copyVisibleOutput(mode){
+  function copyVisibleOutput(){
     const area=$("referenceOutputArea");
     const items=[
       ...area.querySelectorAll(".reference-output-item")
@@ -699,12 +742,10 @@
 
         content.setAttribute(
           "style",
-          mode==="word"
-            ? [
-                wordParagraphCss(style),
-                wordTextCss(style)
-              ].join(";")
-            : hwpStyleCss(style)
+          [
+            wordParagraphCss(style),
+            wordTextCss(style)
+          ].join(";")
         );
       }
 
@@ -796,7 +837,7 @@
       );
 
       try{
-        copyVisibleOutput("word");
+        copyVisibleOutput();
 
         setState(
           "Word용 복사 완료 · Word에서 Ctrl+V로 붙여 넣으세요.",
@@ -812,6 +853,47 @@
     }
   }
 
+  function hwpOutputHtml(){
+    const items=[
+      ...$("referenceOutputArea")
+        .querySelectorAll(".reference-output-item")
+    ];
+
+    const body=items.map(item=>{
+      const content=
+        item.querySelector(".reference-output-content");
+
+      let style;
+      try{
+        style=JSON.parse(
+          item.dataset.referenceStyle || "{}"
+        );
+      }catch(_e){
+        style={};
+      }
+
+      const html=normalizeItalicHtml(
+        content?.innerHTML || ""
+      );
+
+      // 불필요한 wrapper 없이 참고문헌 문단 div만 만든다.
+      return (
+        `<div style="${hwpStyleCss(style)}">`+
+        html+
+        "</div>"
+      );
+    }).join("");
+
+    return (
+      '<html><head><meta charset="utf-8"></head>'+
+      '<body style="margin:0;padding:0;">'+
+      '<!--StartFragment-->'+
+      body+
+      '<!--EndFragment-->'+
+      "</body></html>"
+    );
+  }
+
   function copyHwp(){
     const plain=plainOutputText();
 
@@ -823,14 +905,64 @@
       return;
     }
 
+    const html=hwpOutputHtml();
+    let handled=false;
+
+    const onCopy=event=>{
+      try{
+        if(!event.clipboardData)return;
+
+        event.clipboardData.clearData();
+        event.clipboardData.setData(
+          "text/html",
+          html
+        );
+        event.clipboardData.setData(
+          "text/plain",
+          plain
+        );
+
+        event.preventDefault();
+        handled=true;
+      }catch(error){
+        console.error(
+          "아래한글용 HTML copy 이벤트 오류:",
+          error
+        );
+      }
+    };
+
+    document.addEventListener(
+      "copy",
+      onCopy,
+      {
+        capture:true,
+        once:true
+      }
+    );
+
     try{
-      copyVisibleOutput("hwp");
+      const ok=document.execCommand("copy");
+
+      if(!ok || !handled){
+        throw new Error(
+          "브라우저가 아래한글용 HTML Format 복사를 처리하지 않았습니다."
+        );
+      }
 
       setState(
         "아래한글용 복사 완료 · 반드시 Ctrl+Alt+V → 인터넷 문서로 붙여 넣으세요.",
         "saved"
       );
     }catch(error){
+      try{
+        document.removeEventListener(
+          "copy",
+          onCopy,
+          true
+        );
+      }catch(_e){}
+
       console.error(error);
       setState(
         `아래한글용 복사 실패: ${error.message}`,
