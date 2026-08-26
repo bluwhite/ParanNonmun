@@ -398,7 +398,8 @@
   }
 
   function firePdfDoubleClick(context){
-    if(!context || context.rowIndex<=0 || context.field!=="pdf")return;
+    // 데이터 행이면 어느 열의 셀을 더블클릭해도 그 행의 PDF를 연다.
+    if(!context || context.rowIndex<=0)return;
 
     Promise.resolve(
       onPdfDoubleClick(context)
@@ -505,7 +506,7 @@
     commandDisposable=
       univerAPI.onCommandExecuted?.(()=>scheduleSync(300)) || null;
 
-    // Univer의 셀 클릭 이벤트가 있으면 같은 PDF 셀을 짧은 시간 안에
+    // Univer의 셀 클릭 이벤트가 있으면 같은 데이터 셀을 짧은 시간 안에
     // 두 번 클릭한 것을 더블클릭으로 간주한다.
     if(univerAPI.Event?.CellClicked){
       cellClickDisposable=univerAPI.addEvent(
@@ -517,7 +518,8 @@
           if(!Number.isInteger(row) || !Number.isInteger(column))return;
 
           const context=contextAt(row,column);
-          if(context?.field!=="pdf"){
+
+          if(!context || context.rowIndex<=0){
             lastPdfCellClick={row:-1,column:-1,time:0};
             return;
           }

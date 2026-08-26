@@ -24,17 +24,26 @@ pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/p
     editTools.classList.toggle('hidden',!on);
     modeLabel.textContent=on?'편집 모드':'읽기 모드';
     modeLabel.className='mode-label '+(on?'edit':'read');
-  
+
     for(const x of rendered.values()){
       x.overlay.style.pointerEvents=on?'auto':'none';
       x.overlay.style.cursor=on?(tool==='highlight'?'crosshair':'copy'):'default';
+
+      if(x.textLayer){
+        x.textLayer.style.pointerEvents=on?'none':'auto';
+        x.textLayer.classList.toggle('selection-disabled',on);
+      }
     }
-  
+
+    if(on){
+      try{window.getSelection()?.removeAllRanges();}catch(_e){}
+    }
+
     status.textContent=message || (on
       ? '편집 모드 · 형광펜 또는 메모를 사용한 뒤 저장하세요.'
-      : '읽기 모드 · 아래로 스크롤해서 문서를 읽으세요.');
+      : '읽기 모드 · 글자를 드래그해서 선택·복사할 수 있습니다.');
   }
-  
+
   function clearPending(){
     for(const k of Object.keys(pending)) delete pending[k];
     history=[];
@@ -270,45 +279,88 @@ pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/p
     };
   }
   
+  async function renderSelectableTextLayer(page,viewport,textLayer){
+    textLayer.innerHTML='';
+    textLayer.style.width=Math.floor(viewport.width)+'px';
+    textLayer.style.height=Math.floor(viewport.height)+'px';
+
+    // PDF.js 3.x text layer는 viewport.scale과 같은 --scale-factor가 필요하다.
+    textLayer.style.setProperty(
+      '--scale-factor',
+      String(viewport.scale)
+    );
+
+    const textContent=await page.getTextContent();
+
+    const task=pdfjsLib.renderTextLayer({
+      textContentSource:textContent,
+      container:textLayer,
+      viewport,
+      textDivs:[]
+    });
+
+    if(task?.promise){
+      await task.promise;
+    }
+  }
+
   async function renderPage(n,wrap){
     if(rendered.has(n)) return;
-  
+
     const page=await pdfDoc.getPage(n);
     const viewport=page.getViewport({scale:zoom});
-  
+
     wrap.innerHTML='';
-  
+
     const label=document.createElement('div');
     label.className='page-label';
     label.textContent=`p.${n} · v${APP_VERSION}`;
-  
+
     const base=document.createElement('canvas');
     base.className='base';
     base.width=Math.floor(viewport.width);
     base.height=Math.floor(viewport.height);
-  
+
+    const textLayer=document.createElement('div');
+    textLayer.className='textLayer';
+    textLayer.style.pointerEvents=editMode?'none':'auto';
+    textLayer.classList.toggle('selection-disabled',editMode);
+
     const overlay=document.createElement('canvas');
     overlay.className='overlay';
     overlay.width=base.width;
     overlay.height=base.height;
     overlay.style.pointerEvents=editMode?'auto':'none';
     overlay.style.cursor=editMode?(tool==='highlight'?'crosshair':'copy'):'default';
-  
+
     wrap.style.width=base.width+'px';
     wrap.style.height=base.height+'px';
-    wrap.append(label,base,overlay);
-  
-    rendered.set(n,{wrap,base,overlay,page});
+    wrap.append(label,base,textLayer,overlay);
+
+    rendered.set(n,{wrap,base,textLayer,overlay,page});
     attach(n,overlay);
-  
+
     await page.render({
       canvasContext:base.getContext('2d'),
       viewport
     }).promise;
-  
+
+    try{
+      await renderSelectableTextLayer(
+        page,
+        viewport,
+        textLayer
+      );
+    }catch(error){
+      console.warn(
+        `텍스트 선택 레이어 생성 실패 (p.${n})`,
+        error
+      );
+    }
+
     await redraw(n);
   }
-  
+
   function makeSlots(){
     pagesEl.innerHTML='';
     rendered.clear();
@@ -521,7 +573,10 @@ pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/p
   const initialPage=Math.min(requestedPage,pdfDoc.numPages);
   $('pageIndicator').textContent=`페이지 ${initialPage} / ${pdfDoc.numPages} · v${APP_VERSION}`;
   makeSlots();
-  setEditMode(false,`읽기 모드 · 준비 완료 · v${APP_VERSION}`);
+  setEditMode(
+    false,
+    `읽기 모드 · 글자를 드래그해서 선택·복사할 수 있습니다. · v${APP_VERSION}`
+  );
 
   if(initialPage>1){
     requestAnimationFrame(()=>{
