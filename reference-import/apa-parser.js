@@ -267,9 +267,16 @@
       throw new Error("APA에서 출판연도(예: 2024)를 찾지 못했습니다.");
     }
 
-    const rawAuthors=cleanText(
+    let rawAuthors=cleanText(
       source.slice(0,yearInfo.index)
     ).replace(/^[\s,;:]+|[\s,;:]+$/g,"");
+
+    // APA에서 한글 저자명이 "김철수."처럼 끝나는 경우
+    // 마지막 마침표는 이름의 일부가 아니므로 제거한다.
+    // 영문 저자의 이니셜 마침표(Smith, J.)는 그대로 유지한다.
+    if(/[가-힣]/.test(rawAuthors)){
+      rawAuthors=rawAuthors.replace(/\.\s*$/,"");
+    }
 
     const authors=global.ParanAuthorUtils
       ? global.ParanAuthorUtils.normalizeAuthors(rawAuthors)

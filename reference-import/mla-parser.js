@@ -139,6 +139,23 @@
 
     const text=cleanText(tail);
 
+    // 국내 DB 등에서 자주 보이는 MLA 축약형:
+    //   6.2 (2012): 27-44
+    //   6 (2012): 27-44
+    // 권.호가 붙어 있으면 각각 분리한다.
+    const compact=text.match(
+      /(?:^|[\s,])(\d+)(?:\.(\d+))?\s*\(\s*((?:19|20)\d{2})\s*\)\s*:\s*(\d+)\s*[-–—]\s*(\d+)/
+    );
+
+    if(compact){
+      result.volume=compact[1]||"";
+      result.issue=compact[2]||"";
+      result.year=compact[3]||"";
+      result.startPage=compact[4]||"";
+      result.endPage=compact[5]||"";
+      return result;
+    }
+
     const volume=text.match(/\bvol\.?\s*([0-9A-Za-z-]+)/i);
     if(volume)result.volume=stripEdge(volume[1]);
 
@@ -148,20 +165,50 @@
     const year=text.match(/\b((?:19|20)\d{2})\b/);
     if(year)result.year=year[1];
 
-    const pages=text.match(/\bpp?\.?\s*(\d+)\s*[-–—]\s*(\d+)/i);
+    const pages=text.match(
+      /\bpp?\.?\s*(\d+)\s*[-–—]\s*(\d+)/i
+    );
 
     if(pages){
       result.startPage=pages[1];
       result.endPage=pages[2];
     }else{
-      const single=text.match(/\bp\.?\s*(\d+)\b/i);
-      if(single)result.startPage=single[1];
+      // pp.가 생략되고 "(2012): 27-44"처럼 표기된 경우
+      const colonPages=text.match(
+        /\(\s*(?:19|20)\d{2}\s*\)\s*:\s*(\d+)\s*[-–—]\s*(\d+)/
+      );
+
+      if(colonPages){
+        result.startPage=colonPages[1];
+        result.endPage=colonPages[2];
+      }else{
+        const single=text.match(/\bp\.?\s*(\d+)\b/i);
+        if(single)result.startPage=single[1];
+      }
     }
 
     return result;
   }
 
   function fallbackJournal(afterTitle){
+    // 국내 DB의 MLA 축약형:
+    //   한국어문화교육 6.2 (2012): 27-44.
+    // 학술지 정보 DB에 없는 학술지라도 이름과 메타데이터를 분리한다.
+    const compact=afterTitle.match(
+      /^(.+?)\s+(\d+)(?:\.(\d+))?\s*\(\s*((?:19|20)\d{2})\s*\)\s*:\s*(\d+)\s*[-–—]\s*(\d+)\.?$/
+    );
+
+    if(compact){
+      return {
+        journal:stripJournalDecorations(compact[1]),
+        tail:[
+          compact[2]+(compact[3] ? "."+compact[3] : ""),
+          `(${compact[4]}):`,
+          `${compact[5]}-${compact[6]}`
+        ].join(" ")
+      };
+    }
+
     const boundary=afterTitle.search(
       /,\s*(?:vol\.?|no\.?|(?:19|20)\d{2}\b|pp?\.)/i
     );
