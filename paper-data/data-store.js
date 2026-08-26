@@ -3,7 +3,7 @@
   "use strict";
 
   const DATA_FILE_NAME = "파란논문.json";
-  const SCHEMA_VERSION = 6;
+  const SCHEMA_VERSION = 7;
   const MANAGED_SHEET_ID = "paran-paper-list";
 
   const SYSTEM_COLUMNS = [
@@ -32,6 +32,82 @@
     {key:"thesisEn", label:"학위_해외"},
     {key:"bookEn",   label:"단행본_해외"}
   ];
+
+  const REFERENCE_AUTHOR_SEPARATOR_OPTIONS = Object.freeze([
+    {value:"·", label:"중간점 (·)"},
+    {value:", ", label:"쉼표 (, )"},
+    {value:"; ", label:"세미콜론 (; )"},
+    {value:" & ", label:"앤드 (&)"}
+  ]);
+
+  function normalizeAuthorSeparator(value,fallback="·"){
+    const allowed=
+      REFERENCE_AUTHOR_SEPARATOR_OPTIONS.map(
+        item=>item.value
+      );
+
+    const raw=String(value??"")
+      .replace(/\u00a0/g," ");
+
+    if(allowed.includes(raw)){
+      return raw;
+    }
+
+    // 수동 JSON에서 기호만 적은 경우도 자연스럽게 보정한다.
+    const trimmed=raw.trim();
+
+    if(trimmed===",")return ", ";
+    if(trimmed===";")return "; ";
+    if(trimmed==="&")return " & ";
+    if(trimmed==="·")return "·";
+
+    const fallbackRaw=String(fallback??"·")
+      .replace(/\u00a0/g," ");
+
+    if(allowed.includes(fallbackRaw)){
+      return fallbackRaw;
+    }
+
+    return "·";
+  }
+
+  function defaultAuthorSeparators(separator="·"){
+    const normalized=
+      normalizeAuthorSeparator(separator);
+
+    return Object.fromEntries(
+      REFERENCE_FORMAT_ITEMS.map(
+        item=>[item.key,normalized]
+      )
+    );
+  }
+
+  function normalizeAuthorSeparators(raw={},fallback=null){
+    const base=
+      fallback && typeof fallback==="object"
+        ? fallback
+        : defaultAuthorSeparators();
+
+    const result={};
+
+    for(const item of REFERENCE_FORMAT_ITEMS){
+      result[item.key]=normalizeAuthorSeparator(
+        raw && typeof raw==="object"
+          ? raw[item.key]
+          : undefined,
+        base[item.key] ?? "·"
+      );
+    }
+
+    return result;
+  }
+
+  function effectiveAuthorSeparator(group,formatKey){
+    return normalizeAuthorSeparator(
+      group?.authorSeparators?.[formatKey],
+      "·"
+    );
+  }
 
   const REFERENCE_TEMPLATE_CODES = [
     {code:"AU",label:"저자"},
@@ -203,6 +279,7 @@
     {
       id:"format-group-kyunghee",
       name:"경사대양식",
+      authorSeparators:defaultAuthorSeparators("·"),
       style:{...DEFAULT_REFERENCE_STYLE},
       formatStyles:defaultFormatStyles(DEFAULT_REFERENCE_STYLE),
       formats:{
@@ -217,6 +294,7 @@
     {
       id:"format-group-1",
       name:"양식1",
+      authorSeparators:defaultAuthorSeparators("·"),
       style:{...DEFAULT_REFERENCE_STYLE},
       formatStyles:defaultFormatStyles(DEFAULT_REFERENCE_STYLE),
       formats:{
@@ -231,6 +309,7 @@
     {
       id:"format-group-2",
       name:"양식2",
+      authorSeparators:defaultAuthorSeparators("·"),
       style:{...DEFAULT_REFERENCE_STYLE},
       formatStyles:defaultFormatStyles(DEFAULT_REFERENCE_STYLE),
       formats:{
@@ -248,6 +327,7 @@
     return DEFAULT_REFERENCE_FORMAT_GROUPS.map(group=>({
       id:group.id,
       name:group.name,
+      authorSeparators:{...group.authorSeparators},
       style:{...group.style},
       formatStyles:Object.fromEntries(
         Object.entries(group.formatStyles).map(
@@ -361,9 +441,18 @@
       style
     );
 
+    // 시트의 저자 필드는 항상 중간점(·) 구분으로 저장한다.
+    // authorSeparators는 참고문헌 출력 때 AU 토큰에 적용할
+    // 형식별 출력 구분자만 저장한다.
+    const authorSeparators=normalizeAuthorSeparators(
+      source.authorSeparators,
+      base?.authorSeparators || defaultAuthorSeparators()
+    );
+
     return {
       id:String(source.id||"").trim() || newId("ref-group"),
       name:String(source.name||"").normalize("NFKC").trim(),
+      authorSeparators,
       style,
       formatStyles,
       formats
@@ -611,8 +700,22 @@
         return true;
       }
 
+      if(
+        !group.authorSeparators ||
+        typeof group.authorSeparators!=="object"
+      ){
+        return true;
+      }
+
       return REFERENCE_FORMAT_ITEMS.some(item=>{
         const entry=group.formatStyles[item.key];
+
+        if(
+          typeof group.authorSeparators[item.key]!=="string"
+        ){
+          return true;
+        }
+
         return (
           !entry ||
           typeof entry!=="object" ||
@@ -718,6 +821,7 @@
     hasDuplicateColumnName,
     REFERENCE_FORMAT_ITEMS,
     REFERENCE_TEMPLATE_CODES,
+    REFERENCE_AUTHOR_SEPARATOR_OPTIONS,
     DEFAULT_REFERENCE_STYLE,
     REFERENCE_ALIGNMENTS,
     DEFAULT_REFERENCE_FORMAT_GROUPS,
@@ -727,6 +831,10 @@
     normalizeReferenceStyle,
     normalizeFormatStyles,
     effectiveReferenceStyle,
+    normalizeAuthorSeparator,
+    normalizeAuthorSeparators,
+    defaultAuthorSeparators,
+    effectiveAuthorSeparator,
     normalizeReferenceFormatGroupName,
     sanitizeTemplateHtml,
     templateText,

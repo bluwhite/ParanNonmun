@@ -171,42 +171,99 @@
               <div class="format-template-label">학회지_국내</div>
               <div class="format-template-editor" data-format-key="journalKo"
                    contenteditable="true" spellcheck="false"></div>
+              <label class="format-author-separator-field">
+                <span>저자 구분</span>
+                <select data-author-separator-key="journalKo" aria-label="학회지_국내 저자 구분자">
+                  <option value="·">중간점 ·</option>
+                  <option value=", ">쉼표 ,</option>
+                  <option value="; ">세미콜론 ;</option>
+                  <option value=" &amp; ">앤드 &amp;</option>
+                </select>
+              </label>
             </div>
 
             <div class="format-template-row">
               <div class="format-template-label">학위_국내</div>
               <div class="format-template-editor" data-format-key="thesisKo"
                    contenteditable="true" spellcheck="false"></div>
+              <label class="format-author-separator-field">
+                <span>저자 구분</span>
+                <select data-author-separator-key="thesisKo" aria-label="학위_국내 저자 구분자">
+                  <option value="·">중간점 ·</option>
+                  <option value=", ">쉼표 ,</option>
+                  <option value="; ">세미콜론 ;</option>
+                  <option value=" &amp; ">앤드 &amp;</option>
+                </select>
+              </label>
             </div>
 
             <div class="format-template-row">
               <div class="format-template-label">단행본_국내</div>
               <div class="format-template-editor" data-format-key="bookKo"
                    contenteditable="true" spellcheck="false"></div>
+              <label class="format-author-separator-field">
+                <span>저자 구분</span>
+                <select data-author-separator-key="bookKo" aria-label="단행본_국내 저자 구분자">
+                  <option value="·">중간점 ·</option>
+                  <option value=", ">쉼표 ,</option>
+                  <option value="; ">세미콜론 ;</option>
+                  <option value=" &amp; ">앤드 &amp;</option>
+                </select>
+              </label>
             </div>
 
             <div class="format-template-row">
               <div class="format-template-label">학회지_해외</div>
               <div class="format-template-editor" data-format-key="journalEn"
                    contenteditable="true" spellcheck="false"></div>
+              <label class="format-author-separator-field">
+                <span>저자 구분</span>
+                <select data-author-separator-key="journalEn" aria-label="학회지_해외 저자 구분자">
+                  <option value="·">중간점 ·</option>
+                  <option value=", ">쉼표 ,</option>
+                  <option value="; ">세미콜론 ;</option>
+                  <option value=" &amp; ">앤드 &amp;</option>
+                </select>
+              </label>
             </div>
 
             <div class="format-template-row">
               <div class="format-template-label">학위_해외</div>
               <div class="format-template-editor" data-format-key="thesisEn"
                    contenteditable="true" spellcheck="false"></div>
+              <label class="format-author-separator-field">
+                <span>저자 구분</span>
+                <select data-author-separator-key="thesisEn" aria-label="학위_해외 저자 구분자">
+                  <option value="·">중간점 ·</option>
+                  <option value=", ">쉼표 ,</option>
+                  <option value="; ">세미콜론 ;</option>
+                  <option value=" &amp; ">앤드 &amp;</option>
+                </select>
+              </label>
             </div>
 
             <div class="format-template-row">
               <div class="format-template-label">단행본_해외</div>
               <div class="format-template-editor" data-format-key="bookEn"
                    contenteditable="true" spellcheck="false"></div>
+              <label class="format-author-separator-field">
+                <span>저자 구분</span>
+                <select data-author-separator-key="bookEn" aria-label="단행본_해외 저자 구분자">
+                  <option value="·">중간점 ·</option>
+                  <option value=", ">쉼표 ,</option>
+                  <option value="; ">세미콜론 ;</option>
+                  <option value=" &amp; ">앤드 &amp;</option>
+                </select>
+              </label>
             </div>
           </div>
 
           <div class="format-editor-note">
             템플릿 문자는 직접 수정합니다. 이탤릭이 필요한 부분은 텍스트를 선택하고
             <strong>Ctrl+I</strong>를 누르면 템플릿 자체에 저장됩니다.
+            <br>
+            <strong>저자 구분:</strong> 시트의 저자 값은 항상 중간점(·)으로 구분되어 있다고 보고,
+            참고문헌 출력 시 여기서 선택한 구분자로 <strong>AU</strong>를 변환합니다.
           </div>
 
           <div class="format-code-guide format-code-guide-before-style">

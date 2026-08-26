@@ -67,9 +67,32 @@
     return "";
   }
 
-  function tokenValues(paper){
+  function formatAuthorsForOutput(value,separator="·"){
+    const source=String(value??"");
+
+    if(!source.trim())return "";
+
+    // 시트의 저자 데이터는 항상 중간점(·)으로 저자를 나눈다고 전제한다.
+    // 각 저자 내부의 쉼표(예: Smith, J.)는 그대로 보존한다.
+    const authors=source
+      .split("·")
+      .map(author=>clean(author))
+      .filter(Boolean);
+
+    if(!authors.length)return "";
+
+    const outputSeparator=
+      global.ParanPaperData.normalizeAuthorSeparator(
+        separator,
+        "·"
+      );
+
+    return authors.join(outputSeparator);
+  }
+
+  function tokenValues(paper,authorSeparator="·"){
     return {
-      "AU":clean(paper.authors),
+      "AU":formatAuthorsForOutput(paper.authors,authorSeparator),
       "PY":clean(paper.year),
       "TI":clean(paper.title),
       "JO":clean(paper.journal),
@@ -113,14 +136,14 @@
     return FORMAT_KEY_BY_CHECK.get(check) || null;
   }
 
-  function replaceTokensInTemplate(templateHtml,paper){
+  function replaceTokensInTemplate(templateHtml,paper,authorSeparator="·"){
     const box=document.createElement("div");
     box.innerHTML=
       global.ParanPaperData.sanitizeTemplateHtml(
         templateHtml
       );
 
-    const values=tokenValues(paper);
+    const values=tokenValues(paper,authorSeparator);
 
     const walker=document.createTreeWalker(
       box,
@@ -542,9 +565,16 @@
         return;
       }
 
+      const authorSeparator=
+        global.ParanPaperData.effectiveAuthorSeparator(
+          group,
+          key
+        );
+
       const html=replaceTokensInTemplate(
         template,
-        paper
+        paper,
+        authorSeparator
       );
 
       const style=
@@ -1146,6 +1176,7 @@
     open,
     chooseFormatKey,
     replaceTokensInTemplate,
+    formatAuthorsForOutput,
     formatDomesticVolumeIssue,
     formatParenVolumeIssue,
     formatSlashVolumeIssue

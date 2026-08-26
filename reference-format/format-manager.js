@@ -176,6 +176,11 @@
         group.style
       );
 
+    group.authorSeparators=
+      global.ParanPaperData.normalizeAuthorSeparators(
+        group.authorSeparators
+      );
+
     group.formats=group.formats || {};
     return group;
   }
@@ -257,8 +262,21 @@
       const editor=document.querySelector(
         `[data-format-key="${item.key}"]`
       );
+
       if(editor){
         group.formats[item.key]=sanitizeEditorHtml(editor);
+      }
+
+      const separatorSelect=document.querySelector(
+        `[data-author-separator-key="${item.key}"]`
+      );
+
+      if(separatorSelect){
+        group.authorSeparators[item.key]=
+          global.ParanPaperData.normalizeAuthorSeparator(
+            separatorSelect.value,
+            "·"
+          );
       }
     }
   }
@@ -309,10 +327,24 @@
       const editor=document.querySelector(
         `[data-format-key="${item.key}"]`
       );
-      if(!editor)continue;
 
-      editor.contentEditable=enabled ? "true" : "false";
-      editor.innerHTML=group?.formats?.[item.key] || "";
+      if(editor){
+        editor.contentEditable=enabled ? "true" : "false";
+        editor.innerHTML=group?.formats?.[item.key] || "";
+      }
+
+      const separatorSelect=document.querySelector(
+        `[data-author-separator-key="${item.key}"]`
+      );
+
+      if(separatorSelect){
+        separatorSelect.disabled=!enabled;
+        separatorSelect.value=
+          global.ParanPaperData.effectiveAuthorSeparator(
+            group,
+            item.key
+          );
+      }
     }
 
     renderStylePanel();
@@ -551,6 +583,17 @@
       });
       editor.addEventListener("keydown",handleTemplateKeydown);
       editor.addEventListener("paste",handleTemplatePaste);
+    }
+
+    for(
+      const select of document.querySelectorAll(
+        "[data-author-separator-key]"
+      )
+    ){
+      select.addEventListener("change",()=>{
+        commitEditor();
+        setDirty(true);
+      });
     }
 
     $("formatStyleTargetSelect").addEventListener("change",event=>{
