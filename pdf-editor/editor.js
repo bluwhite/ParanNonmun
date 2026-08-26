@@ -512,7 +512,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/p
   
   $('fileName').textContent=fileName;
   $('filePath').textContent=relativePath;
-  document.title=`${fileName} · v${APP_VERSION}`;
+  document.title=`${fileName} · 파란 논문 · v${APP_VERSION}`;
   
   const f=await fileHandle.getFile();
   originalBytes=new Uint8Array(await f.arrayBuffer());

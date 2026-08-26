@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>파란 논문 · 논문 추가</title>
+<link rel="stylesheet" href="./add.css">
+</head>
+<body>
+<main class="add-wrap">
+  <header class="add-head">
+    <div><div class="eyebrow">RIS Import</div><h1>논문 추가</h1><p>RIS 내용을 붙여 넣으면 아래 항목으로 자동 분리됩니다.</p></div>
+    <span id="versionBadge" class="version"></span>
+  </header>
+
+  <section class="panel">
+    <label class="label" for="risText">RIS 내용</label>
+    <textarea id="risText" autofocus placeholder="TY  - JOUR&#10;AU  - Kim, J. S.&#10;PY  - 2026&#10;TI  - ...&#10;ER  -"></textarea>
+    <div class="hint">붙여 넣으면 자동으로 분석합니다. 필요한 경우 아래 값을 직접 수정할 수 있습니다.</div>
+  </section>
+
+  <section class="panel">
+    <div class="preview-head"><h2>추가될 정보</h2><span id="parseState">RIS 대기 중</span></div>
+    <div id="previewGrid" class="preview-grid"></div>
+  </section>
+
+  <div class="footer-actions">
+    <button id="cancelBtn">취소</button>
+    <button id="addBtn" class="primary" disabled>목록에 추가</button>
+  </div>
+</main>
+
+<script src="../shared.js"></script>
+<script src="../paper-data/data-store.js"></script>
+<script src="../reference-import/ris-parser.js"></script>
+<script src="./add.js"></script>
+</body>
+</html>
