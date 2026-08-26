@@ -480,54 +480,108 @@
         .querySelectorAll(".reference-output-item")
     ];
 
-    const box=document.createElement("div");
-    box.setAttribute("data-paran-hwp-copy","true");
+    const wrapper=document.createElement("div");
+    wrapper.setAttribute("data-paran-hwp-copy","excel-table");
 
-    // 한글이 브라우저 복사 내용을 해석할 때 문단/글자 서식을 더 명확히
-    // 받을 수 있도록 실제 인라인 스타일이 적용된 DOM을 만든다.
-    Object.assign(box.style,{
+    Object.assign(wrapper.style,{
       position:"fixed",
       left:"-100000px",
       top:"0",
       width:"900px",
       background:"#ffffff",
+      color:"#000000"
+    });
+
+    // 아래한글이 Excel에서 복사한 셀/표 기반 클립보드의 서식을
+    // 더 잘 받아들이는 점을 이용해 복사 시에만 1×1 표를 만든다.
+    const table=document.createElement("table");
+    table.setAttribute("border","0");
+    table.setAttribute("cellspacing","0");
+    table.setAttribute("cellpadding","0");
+
+    Object.assign(table.style,{
+      borderCollapse:"collapse",
+      borderSpacing:"0",
+      width:"900px",
+      background:"#ffffff",
       color:"#000000",
       fontFamily:'"Malgun Gothic","맑은 고딕",Arial,sans-serif',
       fontSize:"11pt",
-      lineHeight:"1.6",
-      whiteSpace:"normal"
+      lineHeight:"1.6"
     });
 
-    for(const source of sourceItems){
+    const tbody=document.createElement("tbody");
+    const tr=document.createElement("tr");
+    const td=document.createElement("td");
+
+    Object.assign(td.style,{
+      border:"none",
+      padding:"0",
+      margin:"0",
+      verticalAlign:"top",
+      background:"#ffffff",
+      color:"#000000",
+      fontFamily:'"Malgun Gothic","맑은 고딕",Arial,sans-serif',
+      fontSize:"11pt",
+      lineHeight:"1.6"
+    });
+
+    sourceItems.forEach((source,index)=>{
       const p=document.createElement("p");
 
       Object.assign(p.style,{
-        margin:"0 0 0.65em 0",
+        margin:index===sourceItems.length-1
+          ? "0"
+          : "0 0 0.65em 0",
         padding:"0",
+        border:"0",
         fontStyle:"normal",
-        fontWeight:"normal"
+        fontWeight:"normal",
+        background:"#ffffff",
+        color:"#000000"
       });
 
       p.innerHTML=source.innerHTML;
 
-      // <em>/<i> 태그에만 의존하지 않고 실제 style 속성도 넣는다.
+      // <em>/<i> 태그에 의존하지 않고 Excel/Office 계열이
+      // 읽기 쉬운 실제 font-style 값을 각 이탤릭 구간에 명시한다.
       for(const italic of p.querySelectorAll("em,i")){
-        italic.style.fontStyle="italic";
-        italic.style.fontWeight="inherit";
+        const span=document.createElement("span");
+        span.innerHTML=italic.innerHTML;
+
+        Object.assign(span.style,{
+          fontStyle:"italic",
+          fontWeight:"inherit"
+        });
+
+        italic.replaceWith(span);
       }
 
+      // 사용자가 출력창에서 직접 Ctrl+I 등으로 수정해
+      // 다른 요소에 italic computed style이 생긴 경우도 보존한다.
       p.querySelectorAll("*").forEach(element=>{
-        if(
-          getComputedStyle(element).fontStyle==="italic"
-        ){
-          element.style.fontStyle="italic";
-        }
+        try{
+          if(
+            getComputedStyle(element).fontStyle==="italic"
+          ){
+            element.style.fontStyle="italic";
+          }
+        }catch(_e){}
       });
 
-      box.append(p);
-    }
+      td.append(p);
+    });
 
-    return box;
+    tr.append(td);
+    tbody.append(tr);
+    table.append(tbody);
+    wrapper.append(table);
+
+    return {
+      wrapper,
+      table,
+      cell:td
+    };
   }
 
   async function copyForHwp(){
@@ -541,8 +595,8 @@
       return;
     }
 
-    const box=buildHwpCopyContainer();
-    document.body.append(box);
+    const copyBox=buildHwpCopyContainer();
+    document.body.append(copyBox.wrapper);
 
     const selection=window.getSelection();
     const savedRanges=[];
@@ -557,7 +611,9 @@
       }
 
       const range=document.createRange();
-      range.selectNodeContents(box);
+
+      // Excel과 비슷하게 '표 자체'를 선택해 native copy를 실행한다.
+      range.selectNode(copyBox.table);
 
       selection.removeAllRanges();
       selection.addRange(range);
@@ -566,12 +622,12 @@
 
       if(!ok){
         throw new Error(
-          "브라우저가 한글용 서식 복사를 허용하지 않았습니다."
+          "브라우저가 한글용 표 서식 복사를 허용하지 않았습니다."
         );
       }
 
       setState(
-        "한글용 복사 완료 · 아래한글에서 Ctrl+V로 붙여 넣으세요.",
+        "한글용 복사 완료 · 1셀 표 형식으로 복사했습니다. 아래한글에서 Ctrl+V로 붙여 넣으세요.",
         "saved"
       );
     }catch(error){
@@ -590,7 +646,7 @@
         }
       }catch(_e){}
 
-      box.remove();
+      copyBox.wrapper.remove();
     }
   }
 

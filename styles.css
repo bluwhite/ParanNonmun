@@ -553,3 +553,6 @@ th{position:sticky;top:0;background:#f8fafc;color:#475569;font-size:12px;z-index
   color:#5b21b6;
   font-weight:700;
 }
+
+
+/* v0.12.2 - 한글용 복사는 화면이 아니라 숨은 1x1 Excel 유사 표를 사용 */
