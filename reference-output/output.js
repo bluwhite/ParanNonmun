@@ -197,10 +197,16 @@
 
   function referenceStyleCss(style){
     const s=global.ParanPaperData.normalizeReferenceStyle(style);
-    const hanging=Math.min(
-      s.hangingIndentPt,
-      s.leftIndentPt
-    );
+
+    // 아래한글의
+    //   왼쪽 여백 6pt + 첫 줄 내어쓰기 30pt
+    // 를 CSS hanging indent로 옮기려면
+    //   문단 왼쪽 위치 = 6 + 30 = 36pt
+    //   첫 줄 text-indent = -30pt
+    // 가 되어야 한다.
+    const hanging=Math.max(0,Number(s.hangingIndentPt)||0);
+    const paragraphLeft=
+      Math.max(0,Number(s.leftIndentPt)||0)+hanging;
 
     const letterSpacingEm=
       Number(s.letterSpacingPercent||0)/100;
@@ -214,10 +220,24 @@
       `margin-top:${s.spaceBeforePt}pt`,
       `margin-right:${s.rightIndentPt}pt`,
       `margin-bottom:${s.spaceAfterPt}pt`,
-      `margin-left:${s.leftIndentPt}pt`,
+      `margin-left:${paragraphLeft}pt`,
       `padding-left:0pt`,
       `text-indent:-${hanging}pt`,
       `text-align:${s.alignment}`,
+      "font-weight:normal"
+    ].join(";");
+  }
+
+  function referenceTextCss(style){
+    const s=global.ParanPaperData.normalizeReferenceStyle(style);
+    const letterSpacingEm=
+      Number(s.letterSpacingPercent||0)/100;
+
+    return [
+      `font-family:${cssFontFamily(s.fontFamily)}`,
+      `font-size:${s.fontSizePt}pt`,
+      `font-stretch:${s.fontScalePercent}%`,
+      `letter-spacing:${letterSpacingEm}em`,
       "font-weight:normal"
     ].join(";");
   }
@@ -539,9 +559,10 @@
       );
 
       return (
-        `<p style="${referenceStyleCss(style)}">`+
+        `<div style="${referenceStyleCss(style)}">`+
+        `<span style="${referenceTextCss(style)}">`+
         html+
-        "</p>"
+        "</span></div>"
       );
     }).join("");
 
@@ -553,37 +574,127 @@
   }
 
 
-  async function fallbackRichCopy(){
-    const area=$("referenceOutputArea");
+  function buildNativeCopyBox(){
+    const items=[
+      ...$("referenceOutputArea")
+        .querySelectorAll(".reference-output-item")
+    ];
+
+    const box=document.createElement("div");
+    box.setAttribute("data-paran-native-copy","true");
+
+    Object.assign(box.style,{
+      position:"fixed",
+      left:"-100000px",
+      top:"0",
+      width:"720px",
+      background:"#ffffff",
+      color:"#000000",
+      padding:"0",
+      margin:"0"
+    });
+
+    for(const item of items){
+      const content=
+        item.querySelector(".reference-output-content");
+
+      let style;
+      try{
+        style=JSON.parse(
+          item.dataset.referenceStyle || "{}"
+        );
+      }catch(_e){
+        style={};
+      }
+
+      const row=document.createElement("div");
+      row.setAttribute(
+        "style",
+        referenceStyleCss(style)
+      );
+
+      const text=document.createElement("span");
+      text.setAttribute(
+        "style",
+        referenceTextCss(style)
+      );
+      text.innerHTML=normalizeItalicHtml(
+        content?.innerHTML || ""
+      );
+
+      row.append(text);
+      box.append(row);
+    }
+
+    return box;
+  }
+
+  function nativeRichCopy(){
+    const box=buildNativeCopyBox();
+    document.body.append(box);
+
     const selection=window.getSelection();
     const savedRanges=[];
 
-    if(selection){
-      for(let i=0;i<selection.rangeCount;i++){
-        savedRanges.push(
-          selection.getRangeAt(i).cloneRange()
+    try{
+      if(selection){
+        for(let i=0;i<selection.rangeCount;i++){
+          savedRanges.push(
+            selection.getRangeAt(i).cloneRange()
+          );
+        }
+      }
+
+      const range=document.createRange();
+      range.selectNodeContents(box);
+
+      selection.removeAllRanges();
+      selection.addRange(range);
+
+      const ok=document.execCommand("copy");
+
+      if(!ok){
+        throw new Error(
+          "브라우저 native rich copy 실패"
         );
       }
+    }finally{
+      try{
+        selection.removeAllRanges();
+        for(const oldRange of savedRanges){
+          selection.addRange(oldRange);
+        }
+      }catch(_e){}
+
+      box.remove();
     }
+  }
 
-    const range=document.createRange();
-    range.selectNodeContents(area);
+  async function clipboardItemRichCopy(){
+    const plain=plainOutputText();
+    const html=richOutputHtml();
 
-    selection.removeAllRanges();
-    selection.addRange(range);
-
-    const ok=document.execCommand("copy");
-
-    selection.removeAllRanges();
-    for(const oldRange of savedRanges){
-      selection.addRange(oldRange);
-    }
-
-    if(!ok){
+    if(
+      !navigator.clipboard?.write ||
+      !global.ClipboardItem
+    ){
       throw new Error(
-        "브라우저가 서식 포함 복사를 허용하지 않았습니다."
+        "ClipboardItem을 지원하지 않습니다."
       );
     }
+
+    const item=new ClipboardItem({
+      "text/plain":new Blob(
+        [plain],
+        {type:"text/plain"}
+      ),
+      "text/html":new Blob(
+        [html],
+        {type:"text/html"}
+      )
+    });
+
+    await navigator.clipboard.write([item]);
   }
 
   async function copyRich(){
@@ -597,51 +708,38 @@
       return;
     }
 
-    const html=richOutputHtml();
-
     try{
-      if(
-        navigator.clipboard?.write &&
-        global.ClipboardItem
-      ){
-        const item=new ClipboardItem({
-          "text/plain":new Blob(
-            [plain],
-            {type:"text/plain"}
-          ),
-          "text/html":new Blob(
-            [html],
-            {type:"text/html"}
-          )
-        });
-
-        await navigator.clipboard.write([item]);
-      }else{
-        await fallbackRichCopy();
-      }
+      // 테스트 HTML에서 서식 보존이 잘 되었던 경로와 동일하게
+      // 실제 렌더링 DOM을 선택하여 native copy를 우선 사용한다.
+      nativeRichCopy();
 
       setState(
         "서식 포함 복사 완료 · Word는 Ctrl+V, 아래한글은 반드시 Ctrl+Alt+V → 인터넷 문서로 붙여 넣으세요.",
         "saved"
       );
-    }catch(error){
-      console.error(error);
+    }catch(nativeError){
+      console.warn(
+        "native rich copy 실패, ClipboardItem으로 재시도:",
+        nativeError
+      );
 
       try{
-        await fallbackRichCopy();
+        await clipboardItemRichCopy();
+
         setState(
           "서식 포함 복사 완료 · Word는 Ctrl+V, 아래한글은 반드시 Ctrl+Alt+V → 인터넷 문서로 붙여 넣으세요.",
           "saved"
         );
-      }catch(fallbackError){
-        console.error(fallbackError);
+      }catch(error){
+        console.error(error);
         setState(
-          `서식 포함 복사 실패: ${fallbackError.message}`,
+          `서식 포함 복사 실패: ${error.message}`,
           "error"
         );
       }
     }
   }
+
 
   async function copyPlain(){
     const plain=plainOutputText();
