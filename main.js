@@ -416,8 +416,8 @@ function markDownloadLocation(configured=false){
 
   button.classList.toggle("configured",configured);
   button.textContent=configured
-    ? "다운로드 위치 ✓"
-    : "다운로드 위치";
+    ? "다운로드 폴더 설정 ✓"
+    : "다운로드 폴더 설정";
   button.title=configured
     ? "PDF 선택창이 최근 선택한 다운로드 위치를 기억합니다."
     : "PDF 선택창이 시작할 다운로드 위치를 지정합니다.";
