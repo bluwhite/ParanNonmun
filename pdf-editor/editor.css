@@ -167,3 +167,55 @@
 @media(max-width:700px){
   .pdf-note-tooltip{max-width:240px}
 }
+
+
+/* v0.14.6 - PDF 주석 선택/삭제 */
+.delete-annotation{
+  border-color:#fecaca;
+  background:#fff1f2;
+  color:#b91c1c;
+  font-weight:700;
+}
+.delete-annotation:not(:disabled):hover{
+  background:#ffe4e6;
+  border-color:#fda4af;
+}
+.delete-annotation:disabled{
+  opacity:.45;
+  cursor:not-allowed;
+}
+.pdf-note-marker.selected{
+  outline:3px solid rgba(220,38,38,.42);
+  outline-offset:2px;
+  background:#dc2626;
+  border-color:#991b1b;
+}
+.pdf-note-tooltip-hint{
+  display:block;
+  margin-top:6px;
+  padding-top:5px;
+  border-top:1px solid rgba(146,64,14,.20);
+  color:#78716c;
+  font-size:10px;
+}
+.pdf-highlight-hit{
+  position:absolute;
+  padding:0;
+  margin:0;
+  border:1px solid transparent;
+  background:transparent;
+  pointer-events:none;
+  cursor:pointer;
+  z-index:2;
+}
+.pdf-note-layer.edit-enabled .pdf-highlight-hit{pointer-events:auto}
+.pdf-note-layer.edit-enabled .pdf-highlight-hit:hover{
+  border:1px dashed #ca8a04;
+  background:rgba(255,235,59,.08);
+}
+.pdf-highlight-hit.selected{
+  border:2px solid #dc2626 !important;
+  background:rgba(220,38,38,.08) !important;
+  box-shadow:0 0 0 2px rgba(255,255,255,.72) inset;
+}
+.pdf-highlight-hit.pending-highlight{border-style:dashed}

@@ -5,7 +5,8 @@ pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/p
   const requestedPage=Math.max(1,Number(params.get('page'))||1);
   let rootHandle,fileHandle,parentHandle,fileName,relativePath,originalBytes,pdfDoc;
   let zoom=1.25,tool='highlight',dirty=false,history=[],editMode=false;
-  const pending={},rendered=new Map();
+  let selectedAnnotation=null;
+  const pending={},deletedExisting={},rendered=new Map();
   
   const $=id=>document.getElementById(id);
   const pagesEl=$('pages'),scrollArea=$('scrollArea');
@@ -18,6 +19,80 @@ pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/p
     dirtyBadge.classList.toggle('hidden',!v);
   }
   
+  function deletedSet(page){
+    if(!deletedExisting[page]){
+      deletedExisting[page]=new Set();
+    }
+    return deletedExisting[page];
+  }
+
+  function annotationKey(type,rect){
+    const values=(rect||[])
+      .slice(0,4)
+      .map(value=>{
+        const n=Number(value)||0;
+        return Math.round(n*1000)/1000;
+      });
+    return `${type}:${values.join(",")}`;
+  }
+
+  function pendingKey(item){
+    return `pending:${item._uid}`;
+  }
+
+  function newPendingUid(){
+    if(globalThis.crypto?.randomUUID){
+      return globalThis.crypto.randomUUID();
+    }
+    return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+
+  function updateDeleteButton(){
+    const button=$('deleteAnnotationBtn');
+    if(button){
+      button.disabled=!editMode || !selectedAnnotation;
+    }
+  }
+
+  function clearAnnotationSelection(){
+    selectedAnnotation=null;
+    updateDeleteButton();
+    document.querySelectorAll(
+      '.pdf-note-marker.selected,.pdf-highlight-hit.selected'
+    ).forEach(element=>element.classList.remove('selected'));
+  }
+
+  function selectAnnotation(item,element=null){
+    if(!editMode)return;
+
+    selectedAnnotation={
+      page:item.page,
+      key:item.key,
+      source:item.source,
+      type:item.type,
+      uid:item.uid||null
+    };
+
+    document.querySelectorAll(
+      '.pdf-note-marker.selected,.pdf-highlight-hit.selected'
+    ).forEach(node=>node.classList.remove('selected'));
+
+    if(element)element.classList.add('selected');
+    updateDeleteButton();
+
+    status.textContent=item.type==='highlight'
+      ? '형광펜 선택됨 · 선택 삭제 또는 Delete 키로 삭제할 수 있습니다.'
+      : '메모 선택됨 · 선택 삭제 또는 Delete 키로 삭제할 수 있습니다.';
+  }
+
+  function isSelected(item){
+    return !!(
+      selectedAnnotation &&
+      selectedAnnotation.page===item.page &&
+      selectedAnnotation.key===item.key
+    );
+  }
+
   function setEditMode(on,message=''){
     editMode=on;
     editBtn.classList.toggle('hidden',on);
@@ -33,20 +108,33 @@ pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/p
         x.textLayer.style.pointerEvents=on?'none':'auto';
         x.textLayer.classList.toggle('selection-disabled',on);
       }
+
+      if(x.noteLayer){
+        x.noteLayer.classList.toggle('edit-enabled',on);
+      }
     }
+
+    if(!on){
+      clearAnnotationSelection();
+      closePinnedNoteMarkers();
+    }
+
+    updateDeleteButton();
 
     if(on){
       try{window.getSelection()?.removeAllRanges();}catch(_e){}
     }
 
     status.textContent=message || (on
-      ? '편집 모드 · 형광펜 또는 메모를 사용한 뒤 저장하세요.'
+      ? '편집 모드 · 형광펜/메모를 추가하거나 기존 주석을 선택해 삭제한 뒤 저장하세요.'
       : '읽기 모드 · 글자를 드래그해서 선택·복사할 수 있습니다.');
   }
 
   function clearPending(){
-    for(const k of Object.keys(pending)) delete pending[k];
+    for(const k of Object.keys(pending))delete pending[k];
+    for(const k of Object.keys(deletedExisting))delete deletedExisting[k];
     history=[];
+    clearAnnotationSelection();
     setDirty(false);
   }
   
@@ -67,11 +155,37 @@ pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/p
   editBtn.onclick=()=>setEditMode(true);
   $('highlightBtn').onclick=()=>setTool('highlight');
   $('noteBtn').onclick=()=>setTool('note');
+  $('deleteAnnotationBtn').onclick=()=>deleteSelectedAnnotation();
+
+  document.addEventListener('keydown',event=>{
+    if(
+      !editMode ||
+      !selectedAnnotation ||
+      !['Delete','Backspace'].includes(event.key)
+    )return;
+
+    const target=event.target;
+    const tag=target?.tagName?.toLowerCase();
+    if(tag==='input' || tag==='textarea' || target?.isContentEditable)return;
+
+    event.preventDefault();
+    deleteSelectedAnnotation();
+  });
 
 
   document.addEventListener("pointerdown",event=>{
     if(!event.target.closest?.(".pdf-note-marker")){
       closePinnedNoteMarkers();
+    }
+
+    if(
+      editMode &&
+      selectedAnnotation &&
+      !event.target.closest?.(
+        ".pdf-note-marker,.pdf-highlight-hit,#deleteAnnotationBtn"
+      )
+    ){
+      clearAnnotationSelection();
     }
   });
   
@@ -108,11 +222,11 @@ pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/p
   }
 
   function makeNoteMarker(note,canvasWidth,canvasHeight){
-    const marker=document.createElement("button");
-    marker.type="button";
-    marker.className="pdf-note-marker";
-    marker.setAttribute("aria-label","PDF 메모");
-    marker.setAttribute("aria-expanded","false");
+    const marker=document.createElement('button');
+    marker.type='button';
+    marker.className='pdf-note-marker';
+    marker.setAttribute('aria-label','PDF 메모');
+    marker.setAttribute('aria-expanded','false');
 
     const size=18;
     const x=Math.max(2,Math.min(Number(note.x)||0,canvasWidth-size-2));
@@ -121,43 +235,58 @@ pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/p
     marker.style.left=`${x}px`;
     marker.style.top=`${y}px`;
 
-    if(x>canvasWidth*.62)marker.classList.add("tooltip-left");
-    if(y>canvasHeight*.72)marker.classList.add("tooltip-up");
-    if(note.pending)marker.classList.add("pending-note");
+    if(x>canvasWidth*.62)marker.classList.add('tooltip-left');
+    if(y>canvasHeight*.72)marker.classList.add('tooltip-up');
+    if(note.source==='pending')marker.classList.add('pending-note');
+    if(isSelected(note))marker.classList.add('selected');
 
-    const icon=document.createElement("span");
-    icon.className="pdf-note-icon";
-    icon.setAttribute("aria-hidden","true");
-    icon.textContent="✎";
+    const icon=document.createElement('span');
+    icon.className='pdf-note-icon';
+    icon.setAttribute('aria-hidden','true');
+    icon.textContent='✎';
 
-    const tooltip=document.createElement("span");
-    tooltip.className="pdf-note-tooltip";
+    const tooltip=document.createElement('span');
+    tooltip.className='pdf-note-tooltip';
 
-    const title=document.createElement("span");
-    title.className="pdf-note-tooltip-title";
-    title.textContent=note.pending ? "저장 전 메모" : "메모";
+    const title=document.createElement('span');
+    title.className='pdf-note-tooltip-title';
+    title.textContent=note.source==='pending' ? '저장 전 메모' : '메모';
 
-    const body=document.createElement("span");
-    body.className="pdf-note-tooltip-body";
-    body.textContent=String(note.text||"").trim() || "(내용 없는 메모)";
+    const body=document.createElement('span');
+    body.className='pdf-note-tooltip-body';
+    body.textContent=String(note.text||'').trim() || '(내용 없는 메모)';
 
-    tooltip.append(title,body);
+    const hint=document.createElement('span');
+    hint.className='pdf-note-tooltip-hint';
+    hint.textContent=editMode
+      ? '클릭하여 선택 · 상단의 선택 삭제'
+      : '클릭하면 메모 창을 고정합니다.';
+
+    tooltip.append(title,body,hint);
     marker.append(icon,tooltip);
 
     marker.onclick=event=>{
       event.preventDefault();
       event.stopPropagation();
 
-      const next=!marker.classList.contains("pinned");
+      if(editMode){
+        selectAnnotation(note,marker);
+        marker.classList.add('pinned');
+        marker.setAttribute('aria-expanded','true');
+        return;
+      }
+
+      const next=!marker.classList.contains('pinned');
       closePinnedNoteMarkers(next ? marker : null);
-      marker.classList.toggle("pinned",next);
-      marker.setAttribute("aria-expanded",next ? "true" : "false");
+      marker.classList.toggle('pinned',next);
+      marker.setAttribute('aria-expanded',next ? 'true' : 'false');
     };
 
     marker.onkeydown=event=>{
-      if(event.key==="Escape"){
-        marker.classList.remove("pinned");
-        marker.setAttribute("aria-expanded","false");
+      if(event.key==='Escape'){
+        marker.classList.remove('pinned');
+        marker.setAttribute('aria-expanded','false');
+        clearAnnotationSelection();
         marker.blur();
       }
     };
@@ -165,32 +294,86 @@ pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/p
     return marker;
   }
 
-  function renderNoteMarkers(n,notes){
+  function makeHighlightHit(item){
+    const hit=document.createElement('button');
+    hit.type='button';
+    hit.className='pdf-highlight-hit';
+    hit.setAttribute('aria-label',item.source==='pending' ? '저장 전 형광펜' : '형광펜');
+    hit.style.left=`${item.x}px`;
+    hit.style.top=`${item.y}px`;
+    hit.style.width=`${Math.max(6,item.w)}px`;
+    hit.style.height=`${Math.max(6,item.h)}px`;
+
+    if(item.source==='pending')hit.classList.add('pending-highlight');
+    if(isSelected(item))hit.classList.add('selected');
+
+    hit.onclick=event=>{
+      if(!editMode)return;
+      event.preventDefault();
+      event.stopPropagation();
+      selectAnnotation(item,hit);
+    };
+
+    return hit;
+  }
+
+  function renderAnnotationControls(n,highlights,notes){
     const d=rendered.get(n);
     if(!d?.noteLayer)return;
 
     d.noteLayer.replaceChildren();
-    for(const note of notes){
-      d.noteLayer.append(
-        makeNoteMarker(note,d.overlay.width,d.overlay.height)
-      );
+    for(const highlight of highlights)d.noteLayer.append(makeHighlightHit(highlight));
+    for(const note of notes)d.noteLayer.append(makeNoteMarker(note,d.overlay.width,d.overlay.height));
+  }
+
+  async function deleteSelectedAnnotation(){
+    const selected=selectedAnnotation;
+    if(!editMode || !selected)return;
+
+    const page=selected.page;
+
+    if(selected.source==='pending'){
+      const list=pending[page]||[];
+      const index=list.findIndex(item=>pendingKey(item)===selected.key);
+      if(index>=0){
+        const [item]=list.splice(index,1);
+        history.push({kind:'deletePending',page,index,item});
+      }
+    }else{
+      deletedSet(page).add(selected.key);
+      history.push({kind:'deleteExisting',page,key:selected.key});
     }
+
+    clearAnnotationSelection();
+    closePinnedNoteMarkers();
+    setDirty(true);
+    await redraw(page);
+    status.textContent='주석을 삭제 표시했습니다. 저장하면 PDF에서 실제로 제거됩니다.';
   }
 
   async function redraw(n){
     const d=rendered.get(n);
     if(!d)return;
 
-    const ctx=d.overlay.getContext("2d");
+    const ctx=d.overlay.getContext('2d');
     ctx.clearRect(0,0,d.overlay.width,d.overlay.height);
 
     const notes=[];
+    const highlights=[];
 
     try{
-      const anns=await d.page.getAnnotations({intent:"display"});
+      const anns=await d.page.getAnnotations({intent:'display'});
 
       for(const a of anns){
         if(!a.rect)continue;
+
+        let type=null;
+        if(a.annotationType===9)type='highlight';
+        else if(a.annotationType===1)type='text';
+        else continue;
+
+        const key=annotationKey(type,a.rect);
+        if(deletedSet(n).has(key))continue;
 
         const x=Math.min(a.rect[0],a.rect[2]);
         const y=Math.min(a.rect[1],a.rect[3]);
@@ -198,49 +381,45 @@ pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/p
         const h=Math.abs(a.rect[3]-a.rect[1]);
         const r=pdfRectToCanvas({x,y,w,h},d.overlay.height);
 
-        if(a.annotationType===9){
+        if(type==='highlight'){
           ctx.save();
-          ctx.fillStyle="rgba(255,235,59,.30)";
+          ctx.fillStyle='rgba(255,235,59,.30)';
           ctx.fillRect(r.x,r.y,r.w,r.h);
           ctx.restore();
-        }else if(a.annotationType===1){
-          notes.push({
-            x:r.x,
-            y:r.y,
-            text:annotationText(a),
-            pending:false
-          });
+
+          highlights.push({page:n,key,source:'existing',type,x:r.x,y:r.y,w:r.w,h:r.h});
+        }else{
+          notes.push({page:n,key,source:'existing',type,x:r.x,y:r.y,text:annotationText(a)});
         }
       }
     }catch(e){
-      console.debug("기존 주석 표시 생략",e);
+      console.debug('기존 주석 표시 생략',e);
     }
 
     for(const a of (pending[n]||[])){
       const r=pdfRectToCanvas(a,d.overlay.height);
+      const key=pendingKey(a);
 
-      if(a.type==="highlight"){
+      if(a.type==='highlight'){
         ctx.save();
-        ctx.fillStyle="rgba(255,235,59,.38)";
+        ctx.fillStyle='rgba(255,235,59,.38)';
         ctx.fillRect(r.x,r.y,r.w,r.h);
         ctx.restore();
+        highlights.push({page:n,key,uid:a._uid,source:'pending',type:'highlight',x:r.x,y:r.y,w:r.w,h:r.h});
       }else{
-        notes.push({
-          x:r.x,
-          y:r.y,
-          text:a.text,
-          pending:true
-        });
+        notes.push({page:n,key,uid:a._uid,source:'pending',type:'text',x:r.x,y:r.y,text:a.text});
       }
     }
 
-    renderNoteMarkers(n,notes);
+    renderAnnotationControls(n,highlights,notes);
   }
 
   function addPending(n,a){
-    if(!pending[n]) pending[n]=[];
+    if(!pending[n])pending[n]=[];
+    a._uid=a._uid || newPendingUid();
     pending[n].push(a);
-    history.push({page:n});
+    history.push({kind:'add',page:n,uid:a._uid});
+    clearAnnotationSelection();
     setDirty(true);
     redraw(n);
   }
@@ -374,6 +553,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/p
 
     const noteLayer=document.createElement('div');
     noteLayer.className='pdf-note-layer';
+    noteLayer.classList.toggle('edit-enabled',editMode);
     noteLayer.style.width=base.width+'px';
     noteLayer.style.height=base.height+'px';
 
@@ -448,9 +628,20 @@ pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/p
   
   $('undoBtn').onclick=()=>{
     const h=history.pop();
-    if(!h) return;
-  
-    (pending[h.page]||[]).pop();
+    if(!h)return;
+
+    if(h.kind==='add'){
+      const list=pending[h.page]||[];
+      const index=list.findIndex(item=>item._uid===h.uid);
+      if(index>=0)list.splice(index,1);
+    }else if(h.kind==='deletePending'){
+      const list=pending[h.page] || (pending[h.page]=[]);
+      list.splice(Math.min(h.index,list.length),0,h.item);
+    }else if(h.kind==='deleteExisting'){
+      deletedSet(h.page).delete(h.key);
+    }
+
+    clearAnnotationSelection();
     setDirty(history.length>0);
     redraw(h.page);
   };
@@ -529,16 +720,64 @@ pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/p
     ensureAnnotsArray(doc,page).push(doc.context.register(dict));
   }
   
+  function pdfArrayNumbers(array){
+    const {PDFNumber}=PDFLib;
+    const result=[];
+    if(!array)return result;
+
+    for(let i=0;i<array.size();i++){
+      try{
+        const number=array.lookup(i,PDFNumber);
+        result.push(number.asNumber());
+      }catch(_e){
+        result.push(0);
+      }
+    }
+    return result;
+  }
+
+  function removeDeletedAnnotations(doc,page,pageNumber){
+    const {PDFName,PDFArray,PDFDict}=PDFLib;
+    const removeKeys=deletedExisting[pageNumber];
+    if(!removeKeys?.size)return;
+
+    const annots=page.node.lookupMaybe(PDFName.of('Annots'),PDFArray);
+    if(!annots)return;
+
+    for(let i=annots.size()-1;i>=0;i--){
+      try{
+        const ref=annots.get(i);
+        const dict=doc.context.lookup(ref,PDFDict);
+        const subtype=String(dict.get(PDFName.of('Subtype'))||'').replace(/^\//,'');
+        const type=subtype==='Highlight' ? 'highlight' : subtype==='Text' ? 'text' : null;
+        if(!type)continue;
+
+        const rect=dict.lookupMaybe(PDFName.of('Rect'),PDFArray);
+        const key=annotationKey(type,pdfArrayNumbers(rect));
+        if(removeKeys.has(key))annots.remove(i);
+      }catch(error){
+        console.warn('PDF 주석 삭제 확인 실패:',error);
+      }
+    }
+  }
+
   async function buildPdf(){
     const doc=await PDFLib.PDFDocument.load(originalBytes.slice());
     const ps=doc.getPages();
   
+    for(const [pageKey,set] of Object.entries(deletedExisting)){
+      if(!set?.size)continue;
+      const pageNumber=Number(pageKey);
+      const page=ps[pageNumber-1];
+      if(page)removeDeletedAnnotations(doc,page,pageNumber);
+    }
+
     for(const [k,list] of Object.entries(pending)){
       const page=ps[Number(k)-1];
-      if(!page) continue;
+      if(!page)continue;
   
       for(const a of list){
-        if(a.type==='highlight') addHighlight(doc,page,a);
+        if(a.type==='highlight')addHighlight(doc,page,a);
         else addText(doc,page,a);
       }
     }
