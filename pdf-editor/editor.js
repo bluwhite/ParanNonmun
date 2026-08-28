@@ -67,6 +67,13 @@ pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/p
   editBtn.onclick=()=>setEditMode(true);
   $('highlightBtn').onclick=()=>setTool('highlight');
   $('noteBtn').onclick=()=>setTool('note');
+
+
+  document.addEventListener("pointerdown",event=>{
+    if(!event.target.closest?.(".pdf-note-marker")){
+      closePinnedNoteMarkers();
+    }
+  });
   
   function canvasPoint(canvas,e){
     const r=canvas.getBoundingClientRect();
@@ -91,113 +98,145 @@ pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/p
     return '';
   }
   
-  function wrapText(ctx,text,maxWidth){
-    const lines=[];
-    let line='';
-    for(const ch of [...(text||'')]){
-      const test=line+ch;
-      if(line && ctx.measureText(test).width>maxWidth){
-        lines.push(line);
-        line=ch;
-      }else{
-        line=test;
+  function closePinnedNoteMarkers(except=null){
+    document.querySelectorAll(".pdf-note-marker.pinned").forEach(marker=>{
+      if(marker!==except){
+        marker.classList.remove("pinned");
+        marker.setAttribute("aria-expanded","false");
       }
+    });
+  }
+
+  function makeNoteMarker(note,canvasWidth,canvasHeight){
+    const marker=document.createElement("button");
+    marker.type="button";
+    marker.className="pdf-note-marker";
+    marker.setAttribute("aria-label","PDF 메모");
+    marker.setAttribute("aria-expanded","false");
+
+    const size=18;
+    const x=Math.max(2,Math.min(Number(note.x)||0,canvasWidth-size-2));
+    const y=Math.max(2,Math.min(Number(note.y)||0,canvasHeight-size-2));
+
+    marker.style.left=`${x}px`;
+    marker.style.top=`${y}px`;
+
+    if(x>canvasWidth*.62)marker.classList.add("tooltip-left");
+    if(y>canvasHeight*.72)marker.classList.add("tooltip-up");
+    if(note.pending)marker.classList.add("pending-note");
+
+    const icon=document.createElement("span");
+    icon.className="pdf-note-icon";
+    icon.setAttribute("aria-hidden","true");
+    icon.textContent="✎";
+
+    const tooltip=document.createElement("span");
+    tooltip.className="pdf-note-tooltip";
+
+    const title=document.createElement("span");
+    title.className="pdf-note-tooltip-title";
+    title.textContent=note.pending ? "저장 전 메모" : "메모";
+
+    const body=document.createElement("span");
+    body.className="pdf-note-tooltip-body";
+    body.textContent=String(note.text||"").trim() || "(내용 없는 메모)";
+
+    tooltip.append(title,body);
+    marker.append(icon,tooltip);
+
+    marker.onclick=event=>{
+      event.preventDefault();
+      event.stopPropagation();
+
+      const next=!marker.classList.contains("pinned");
+      closePinnedNoteMarkers(next ? marker : null);
+      marker.classList.toggle("pinned",next);
+      marker.setAttribute("aria-expanded",next ? "true" : "false");
+    };
+
+    marker.onkeydown=event=>{
+      if(event.key==="Escape"){
+        marker.classList.remove("pinned");
+        marker.setAttribute("aria-expanded","false");
+        marker.blur();
+      }
+    };
+
+    return marker;
+  }
+
+  function renderNoteMarkers(n,notes){
+    const d=rendered.get(n);
+    if(!d?.noteLayer)return;
+
+    d.noteLayer.replaceChildren();
+    for(const note of notes){
+      d.noteLayer.append(
+        makeNoteMarker(note,d.overlay.width,d.overlay.height)
+      );
     }
-    if(line) lines.push(line);
-    return lines;
   }
-  
-  function drawNoteBox(ctx,x,y,text,canvasWidth,canvasHeight){
-    const boxW=Math.min(260,Math.max(180,canvasWidth*0.33));
-    ctx.save();
-    ctx.font='14px system-ui,-apple-system,"Segoe UI",sans-serif';
-  
-    const lines=wrapText(ctx,text || '(내용 없는 메모)',boxW-40).slice(0,8);
-    const boxH=Math.max(50,18+lines.length*18);
-  
-    let bx=x+10;
-    let by=y+10;
-    if(bx+boxW>canvasWidth-4) bx=Math.max(4,x-boxW-10);
-    if(by+boxH>canvasHeight-4) by=Math.max(4,canvasHeight-boxH-4);
-  
-    ctx.fillStyle='rgba(255,248,196,.97)';
-    ctx.strokeStyle='rgba(161,98,7,.92)';
-    ctx.lineWidth=1.4;
-    ctx.fillRect(bx,by,boxW,boxH);
-    ctx.strokeRect(bx,by,boxW,boxH);
-  
-    ctx.fillStyle='#facc15';
-    ctx.strokeStyle='#a16207';
-    ctx.lineWidth=2;
-    ctx.beginPath();
-    ctx.arc(bx+15,by+16,8,0,Math.PI*2);
-    ctx.fill();
-    ctx.stroke();
-  
-    ctx.fillStyle='#713f12';
-    ctx.font='bold 11px sans-serif';
-    ctx.fillText('!',bx+12,by+20);
-  
-    ctx.fillStyle='#3f2d00';
-    ctx.font='14px system-ui,-apple-system,"Segoe UI",sans-serif';
-    lines.forEach((line,i)=>ctx.fillText(line,bx+32,by+22+i*18));
-    ctx.restore();
-  }
-  
+
   async function redraw(n){
     const d=rendered.get(n);
-    if(!d) return;
-  
-    const ctx=d.overlay.getContext('2d');
+    if(!d)return;
+
+    const ctx=d.overlay.getContext("2d");
     ctx.clearRect(0,0,d.overlay.width,d.overlay.height);
-  
-    // Existing standard PDF annotations.
+
+    const notes=[];
+
     try{
-      const anns=await d.page.getAnnotations({intent:'display'});
-  
+      const anns=await d.page.getAnnotations({intent:"display"});
+
       for(const a of anns){
-        if(!a.rect) continue;
-  
+        if(!a.rect)continue;
+
         const x=Math.min(a.rect[0],a.rect[2]);
         const y=Math.min(a.rect[1],a.rect[3]);
         const w=Math.abs(a.rect[2]-a.rect[0]);
         const h=Math.abs(a.rect[3]-a.rect[1]);
         const r=pdfRectToCanvas({x,y,w,h},d.overlay.height);
-  
+
         if(a.annotationType===9){
           ctx.save();
-          ctx.fillStyle='rgba(255,235,59,.30)';
+          ctx.fillStyle="rgba(255,235,59,.30)";
           ctx.fillRect(r.x,r.y,r.w,r.h);
           ctx.restore();
         }else if(a.annotationType===1){
-          drawNoteBox(
-            ctx,r.x,r.y,annotationText(a),
-            d.overlay.width,d.overlay.height
-          );
+          notes.push({
+            x:r.x,
+            y:r.y,
+            text:annotationText(a),
+            pending:false
+          });
         }
       }
     }catch(e){
-      console.debug('기존 주석 표시 생략',e);
+      console.debug("기존 주석 표시 생략",e);
     }
-  
-    // Pending edits.
+
     for(const a of (pending[n]||[])){
       const r=pdfRectToCanvas(a,d.overlay.height);
-  
-      if(a.type==='highlight'){
+
+      if(a.type==="highlight"){
         ctx.save();
-        ctx.fillStyle='rgba(255,235,59,.38)';
+        ctx.fillStyle="rgba(255,235,59,.38)";
         ctx.fillRect(r.x,r.y,r.w,r.h);
         ctx.restore();
       }else{
-        drawNoteBox(
-          ctx,r.x,r.y,a.text,
-          d.overlay.width,d.overlay.height
-        );
+        notes.push({
+          x:r.x,
+          y:r.y,
+          text:a.text,
+          pending:true
+        });
       }
     }
+
+    renderNoteMarkers(n,notes);
   }
-  
+
   function addPending(n,a){
     if(!pending[n]) pending[n]=[];
     pending[n].push(a);
@@ -333,11 +372,16 @@ pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/p
     overlay.style.pointerEvents=editMode?'auto':'none';
     overlay.style.cursor=editMode?(tool==='highlight'?'crosshair':'copy'):'default';
 
+    const noteLayer=document.createElement('div');
+    noteLayer.className='pdf-note-layer';
+    noteLayer.style.width=base.width+'px';
+    noteLayer.style.height=base.height+'px';
+
     wrap.style.width=base.width+'px';
     wrap.style.height=base.height+'px';
-    wrap.append(label,base,textLayer,overlay);
+    wrap.append(label,base,textLayer,overlay,noteLayer);
 
-    rendered.set(n,{wrap,base,textLayer,overlay,page});
+    rendered.set(n,{wrap,base,textLayer,overlay,noteLayer,page});
     attach(n,overlay);
 
     await page.render({
@@ -575,7 +619,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/p
   makeSlots();
   setEditMode(
     false,
-    `읽기 모드 · 글자를 드래그해서 선택·복사할 수 있습니다. · v${APP_VERSION}`
+    `읽기 모드 · 글자를 선택·복사할 수 있습니다. 메모 표시에 마우스를 올리면 내용을 볼 수 있습니다. · v${APP_VERSION}`
   );
 
   if(initialPage>1){
