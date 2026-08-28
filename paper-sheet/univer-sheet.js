@@ -34,6 +34,28 @@
     return null;
   }
 
+  function ensureHeaderRowFrozen(snapshot){
+    const managed=getManagedSheet(snapshot);
+    if(!managed)return snapshot;
+
+    const existing=
+      managed.freeze && typeof managed.freeze==="object"
+        ? managed.freeze
+        : {};
+
+    const xSplit=Math.max(0,Number(existing.xSplit)||0);
+    const ySplit=Math.max(1,Number(existing.ySplit)||0);
+
+    managed.freeze={
+      xSplit,
+      ySplit,
+      startRow:Math.max(ySplit,Number(existing.startRow)||0),
+      startColumn:Math.max(xSplit,Number(existing.startColumn)||0)
+    };
+
+    return snapshot;
+  }
+
   function paperValue(paper,column){
     if(column.system)return paper[column.field] ?? "";
     return paper.custom?.[column.id] ?? "";
@@ -453,6 +475,10 @@
       snapshot.sheetOrder=Array.isArray(snapshot.sheetOrder) ? snapshot.sheetOrder : [];
       if(!snapshot.sheetOrder.includes(MANAGED_SHEET_ID))snapshot.sheetOrder.unshift(MANAGED_SHEET_ID);
     }
+
+    // 기존 데이터 파일의 sheetSnapshot에도 최소 첫 번째 제목행을 고정한다.
+    // 이미 2행 이상 또는 열 고정이 설정되어 있으면 기존 값을 유지한다.
+    ensureHeaderRowFrozen(snapshot);
 
     restoring=true;
     univerAPI.createWorkbook(snapshot);
