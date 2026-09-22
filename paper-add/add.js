@@ -313,6 +313,45 @@ function parseRis(){
   }
 }
 
+
+function parseBibtex(){
+  const text=inputText();
+
+  if(!text){
+    clearPreview();
+    setParseState("BibTeX 내용을 입력하세요.","error");
+    return;
+  }
+
+  try{
+    parsed=ParanBibtexParser.parse(text);
+
+    if(parsed.journal && !parsed.publisher){
+      enrichPublisherFromJournal(parsed);
+    }
+
+    fillPreview(parsed);
+    $("addBtn").disabled=!parsed.title;
+
+    const type=parsed._bibtexType
+      ? "@" + parsed._bibtexType
+      : "BibTeX";
+    const key=parsed._citationKey
+      ? " · " + parsed._citationKey
+      : "";
+
+    setParseState(
+      "BibTeX 분석 완료 · " + type + key
+    );
+  }catch(error){
+    clearPreview();
+    setParseState(
+      "BibTeX 분석 실패: " + error.message,
+      "error"
+    );
+  }
+}
+
 async function parseApa(){
   const text=inputText();
 
@@ -425,7 +464,7 @@ $("risText").addEventListener("input",()=>{
   clearPreview();
   clearAiDiagnostic();
   setParseState(
-    "입력됨 · AI, RIS, MLA 또는 APA 버튼을 누르세요."
+    "입력됨 · AI, RIS, BibTeX, MLA 또는 APA 버튼을 누르세요."
   );
 });
 
@@ -445,13 +484,14 @@ $("brCleanupBtn").onclick=()=>{
   clearPreview();
   clearAiDiagnostic();
   setParseState(
-    "BR 태그를 줄바꿈으로 변환했습니다. AI, RIS, MLA 또는 APA 버튼을 누르세요."
+    "BR 태그를 줄바꿈으로 변환했습니다. AI, RIS, BibTeX, MLA 또는 APA 버튼을 누르세요."
   );
   textarea.focus();
 };
 
 $("aiParseBtn").onclick=parseAi;
 $("risParseBtn").onclick=parseRis;
+$("bibtexParseBtn").onclick=parseBibtex;
 $("mlaParseBtn").onclick=parseMla;
 $("apaParseBtn").onclick=parseApa;
 
