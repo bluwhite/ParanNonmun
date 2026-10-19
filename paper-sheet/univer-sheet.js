@@ -301,6 +301,7 @@
 
       if(pdfValue){
         rowsCfg[rowIndex]={
+          text:String(rowIndex+1),
           fontColor:PDF_ROW_NUMBER_COLOR
         };
       }
