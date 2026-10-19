@@ -267,28 +267,14 @@
 
   const PDF_ROW_NUMBER_COLOR="#2563EB";
 
-  function refreshPdfRowHeaderStyles(snapshot=null){
-    const worksheet=getManagedWorksheet();
-    const workbook=getActiveWorkbook();
-
-    if(
-      !worksheet ||
-      !workbook ||
-      typeof worksheet.customizeRowHeader!=="function"
-    ){
-      return;
-    }
-
-    const currentSnapshot=snapshot || workbook.save();
-    const managed=getManagedSheet(currentSnapshot);
-    const pdfColumn=systemColumnIndex(currentSnapshot,"pdf");
+  function buildPdfRowHeaderConfig(snapshot){
+    const managed=getManagedSheet(snapshot);
+    const pdfColumn=systemColumnIndex(snapshot,"pdf");
+    const rowsCfg={};
 
     if(!managed || pdfColumn===null){
-      worksheet.customizeRowHeader({rowsCfg:{}});
-      return;
+      return {rowsCfg};
     }
-
-    const rowsCfg={};
 
     for(const rowKey of Object.keys(managed.cellData || {})){
       const rowIndex=Number(rowKey);
@@ -307,7 +293,50 @@
       }
     }
 
-    worksheet.customizeRowHeader({rowsCfg});
+    return {rowsCfg};
+  }
+
+  function refreshPdfRowHeaderStyles(snapshot=null){
+    const workbook=getActiveWorkbook();
+    if(!workbook)return;
+
+    const currentSnapshot=snapshot || workbook.save();
+    const config=buildPdfRowHeaderConfig(currentSnapshot);
+
+    // customizeRowHeader는 렌더 유닛이 준비된 뒤에만 호출할 수 있다.
+    // createWorkbook 직후에는 Render Unit이 아직 없을 수 있으므로
+    // 다음 프레임까지 재시도한다.
+    const apply=()=>{
+      const worksheet=getManagedWorksheet();
+      if(
+        !worksheet ||
+        typeof worksheet.customizeRowHeader!=="function"
+      ){
+        return false;
+      }
+
+      try{
+        worksheet.customizeRowHeader(config);
+        worksheet.refreshCanvas?.();
+        return true;
+      }catch(error){
+        if(
+          String(error?.message || error)
+            .includes("Render Unit with unitId")
+        ){
+          return false;
+        }
+        console.warn("PDF 행 번호 스타일 적용 실패:",error);
+        return true;
+      }
+    };
+
+    if(apply())return;
+
+    requestAnimationFrame(()=>{
+      if(apply())return;
+      setTimeout(()=>{apply();},60);
+    });
   }
 
 
@@ -534,7 +563,11 @@
     onCount(data.papers?.length || 0);
 
     bindEvents();
-    refreshPdfRowHeaderStyles(snapshot);
+
+    // 워크북 모델이 생성된 뒤 UI 렌더 유닛이 준비되는 시점에 적용한다.
+    requestAnimationFrame(()=>{
+      refreshPdfRowHeaderStyles(snapshot);
+    });
   }
 
   function bindEvents(){
