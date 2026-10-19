@@ -265,6 +265,50 @@
     return workbook.getSheetBySheetId?.(MANAGED_SHEET_ID) || workbook.getActiveSheet?.() || null;
   }
 
+  const PDF_ROW_NUMBER_COLOR="#2563EB";
+
+  function refreshPdfRowHeaderStyles(snapshot=null){
+    const worksheet=getManagedWorksheet();
+    const workbook=getActiveWorkbook();
+
+    if(
+      !worksheet ||
+      !workbook ||
+      typeof worksheet.customizeRowHeader!=="function"
+    ){
+      return;
+    }
+
+    const currentSnapshot=snapshot || workbook.save();
+    const managed=getManagedSheet(currentSnapshot);
+    const pdfColumn=systemColumnIndex(currentSnapshot,"pdf");
+
+    if(!managed || pdfColumn===null){
+      worksheet.customizeRowHeader({rowsCfg:{}});
+      return;
+    }
+
+    const rowsCfg={};
+
+    for(const rowKey of Object.keys(managed.cellData || {})){
+      const rowIndex=Number(rowKey);
+      if(!Number.isInteger(rowIndex) || rowIndex<=0)continue;
+
+      const row=managed.cellData[rowKey] || {};
+      const pdfValue=cellText(
+        row[pdfColumn] ?? row[String(pdfColumn)]
+      ).trim();
+
+      if(pdfValue){
+        rowsCfg[rowIndex]={
+          fontColor:PDF_ROW_NUMBER_COLOR
+        };
+      }
+    }
+
+    worksheet.customizeRowHeader({rowsCfg});
+  }
+
 
   function systemColumnIndex(snapshot,field){
     const managed=getManagedSheet(snapshot);
@@ -489,6 +533,7 @@
     onCount(data.papers?.length || 0);
 
     bindEvents();
+    refreshPdfRowHeaderStyles(snapshot);
   }
 
   function bindEvents(){
@@ -553,6 +598,7 @@
       lastValidSnapshot=clone(snapshot);
       lastSnapshotJson=json;
       onCount(next.papers.length);
+      refreshPdfRowHeaderStyles(snapshot);
       onStatus("저장 중...","saving");
       await onDataChange(next);
       onStatus("저장됨","saved");
