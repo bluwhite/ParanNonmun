@@ -9,6 +9,9 @@
   let univerAPI=null;
   let changeDisposable=null;
   let commandDisposable=null;
+  let skeletonDisposable=null;
+  let renderReady=false;
+  let pendingRowHeaderSnapshot=null;
   let currentData=null;
   let onDataChange=async()=>{};
   let onCount=()=>{};
@@ -298,45 +301,35 @@
 
   function refreshPdfRowHeaderStyles(snapshot=null){
     const workbook=getActiveWorkbook();
-    if(!workbook)return;
+    if(!workbook)return false;
 
     const currentSnapshot=snapshot || workbook.save();
-    const config=buildPdfRowHeaderConfig(currentSnapshot);
 
-    // customizeRowHeader는 렌더 유닛이 준비된 뒤에만 호출할 수 있다.
-    // createWorkbook 직후에는 Render Unit이 아직 없을 수 있으므로
-    // 다음 프레임까지 재시도한다.
-    const apply=()=>{
-      const worksheet=getManagedWorksheet();
-      if(
-        !worksheet ||
-        typeof worksheet.customizeRowHeader!=="function"
-      ){
-        return false;
-      }
+    // F5 자동 복원처럼 워크북 모델이 UI 렌더러보다 먼저 만들어질 수 있다.
+    // 실제 SheetSkeletonChanged 이벤트가 오기 전에는 렌더 API를 호출하지 않는다.
+    if(!renderReady){
+      pendingRowHeaderSnapshot=clone(currentSnapshot);
+      return false;
+    }
 
-      try{
-        worksheet.customizeRowHeader(config);
-        worksheet.refreshCanvas?.();
-        return true;
-      }catch(error){
-        if(
-          String(error?.message || error)
-            .includes("Render Unit with unitId")
-        ){
-          return false;
-        }
-        console.warn("PDF 행 번호 스타일 적용 실패:",error);
-        return true;
-      }
-    };
+    const worksheet=getManagedWorksheet();
+    if(
+      !worksheet ||
+      typeof worksheet.customizeRowHeader!=="function"
+    ){
+      return false;
+    }
 
-    if(apply())return;
-
-    requestAnimationFrame(()=>{
-      if(apply())return;
-      setTimeout(()=>{apply();},60);
-    });
+    try{
+      worksheet.customizeRowHeader(
+        buildPdfRowHeaderConfig(currentSnapshot)
+      );
+      worksheet.refreshCanvas?.();
+      return true;
+    }catch(error){
+      console.warn("PDF 행 번호 스타일 적용 실패:",error);
+      return false;
+    }
   }
 
 
@@ -492,9 +485,11 @@
   function disposeListeners(){
     try{changeDisposable?.dispose?.();}catch(_e){}
     try{commandDisposable?.dispose?.();}catch(_e){}
+    try{skeletonDisposable?.dispose?.();}catch(_e){}
 
     changeDisposable=null;
     commandDisposable=null;
+    skeletonDisposable=null;
   }
 
   function disposeWorkbook(){
@@ -554,6 +549,12 @@
     // 이미 2행 이상 또는 열 고정이 설정되어 있으면 기존 값을 유지한다.
     ensureHeaderRowFrozen(snapshot);
 
+    renderReady=false;
+    pendingRowHeaderSnapshot=clone(snapshot);
+
+    // 렌더 준비 이벤트를 놓치지 않도록 워크북 생성 전에 먼저 구독한다.
+    bindEvents();
+
     restoring=true;
     univerAPI.createWorkbook(snapshot);
     restoring=false;
@@ -561,13 +562,6 @@
     lastValidSnapshot=clone(snapshot);
     lastSnapshotJson=JSON.stringify(snapshot);
     onCount(data.papers?.length || 0);
-
-    bindEvents();
-
-    // 워크북 모델이 생성된 뒤 UI 렌더 유닛이 준비되는 시점에 적용한다.
-    requestAnimationFrame(()=>{
-      refreshPdfRowHeaderStyles(snapshot);
-    });
   }
 
   function bindEvents(){
@@ -577,6 +571,23 @@
       changeDisposable=univerAPI.addEvent(
         univerAPI.Event.SheetValueChanged,
         ()=>scheduleSync(120)
+      );
+    }
+
+    if(univerAPI.Event?.SheetSkeletonChanged){
+      skeletonDisposable=univerAPI.addEvent(
+        univerAPI.Event.SheetSkeletonChanged,
+        ()=>{
+          if(renderReady || !pendingRowHeaderSnapshot)return;
+
+          renderReady=true;
+          const snapshot=pendingRowHeaderSnapshot;
+          pendingRowHeaderSnapshot=null;
+
+          requestAnimationFrame(()=>{
+            refreshPdfRowHeaderStyles(snapshot);
+          });
+        }
       );
     }
 
