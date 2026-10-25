@@ -10,7 +10,8 @@
   let changeDisposable=null;
   let commandDisposable=null;
   let skeletonDisposable=null;
-  let renderReady=false;
+  let rowHeaderTimer=null;
+  let rowHeaderRetryCount=0;
   let pendingRowHeaderSnapshot=null;
   let currentData=null;
   let onDataChange=async()=>{};
@@ -306,12 +307,9 @@
 
     const currentSnapshot=snapshot || workbook.save();
 
-    // F5 자동 복원처럼 워크북 모델이 UI 렌더러보다 먼저 만들어질 수 있다.
-    // 실제 SheetSkeletonChanged 이벤트가 오기 전에는 렌더 API를 호출하지 않는다.
-    if(!renderReady){
-      pendingRowHeaderSnapshot=clone(currentSnapshot);
-      return false;
-    }
+    pendingRowHeaderSnapshot=clone(currentSnapshot);
+    clearTimeout(rowHeaderTimer);
+    rowHeaderTimer=null;
 
     const worksheet=getManagedWorksheet();
     if(
@@ -326,8 +324,20 @@
         buildPdfRowHeaderConfig(currentSnapshot)
       );
       worksheet.refreshCanvas?.();
+      pendingRowHeaderSnapshot=null;
+      rowHeaderRetryCount=0;
       return true;
     }catch(error){
+      // 초기 생성 시 SheetSkeletonChanged가 발생하지 않을 수 있다.
+      // 모델 생성 직후의 렌더 준비 지연만 제한적으로 재시도한다.
+      if(/Render Unit|Render component/.test(String(error?.message)) && rowHeaderRetryCount<40){
+        rowHeaderRetryCount++;
+        rowHeaderTimer=setTimeout(()=>{
+          rowHeaderTimer=null;
+          refreshPdfRowHeaderStyles();
+        },100);
+        return false;
+      }
       console.warn("PDF 행 번호 스타일 적용 실패:",error);
       return false;
     }
@@ -494,6 +504,10 @@
   }
 
   function disposeWorkbook(){
+    clearTimeout(rowHeaderTimer);
+    rowHeaderTimer=null;
+    rowHeaderRetryCount=0;
+    pendingRowHeaderSnapshot=null;
     disposeListeners();
     const workbook=getActiveWorkbook();
     if(workbook){
@@ -550,7 +564,7 @@
     // 이미 2행 이상 또는 열 고정이 설정되어 있으면 기존 값을 유지한다.
     ensureHeaderRowFrozen(snapshot);
 
-    renderReady=false;
+    rowHeaderRetryCount=0;
     pendingRowHeaderSnapshot=clone(snapshot);
 
     // 렌더 준비 이벤트를 놓치지 않도록 워크북 생성 전에 먼저 구독한다.
@@ -559,6 +573,9 @@
     restoring=true;
     univerAPI.createWorkbook(snapshot);
     restoring=false;
+
+    // 생성 시 구조 변경 이벤트가 없어도 표시를 적용한다.
+    rowHeaderTimer=setTimeout(()=>refreshPdfRowHeaderStyles(),0);
 
     lastValidSnapshot=clone(snapshot);
     lastSnapshotJson=JSON.stringify(snapshot);
@@ -579,15 +596,8 @@
       skeletonDisposable=univerAPI.addEvent(
         univerAPI.Event.SheetSkeletonChanged,
         ()=>{
-          if(renderReady || !pendingRowHeaderSnapshot)return;
-
-          renderReady=true;
-          const snapshot=pendingRowHeaderSnapshot;
-          pendingRowHeaderSnapshot=null;
-
-          requestAnimationFrame(()=>{
-            refreshPdfRowHeaderStyles(snapshot);
-          });
+          clearTimeout(rowHeaderTimer);
+          rowHeaderTimer=setTimeout(()=>refreshPdfRowHeaderStyles(),0);
         }
       );
     }
