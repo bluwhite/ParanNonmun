@@ -3,7 +3,7 @@
   "use strict";
 
   const DATA_FILE_NAME = "파란논문.json";
-  const SCHEMA_VERSION = 7;
+  const SCHEMA_VERSION = 8;
   const MANAGED_SHEET_ID = "paran-paper-list";
 
   const SYSTEM_COLUMNS = [
@@ -18,7 +18,11 @@
     {id:"startPage", name:"시작페이지",system:true, field:"startPage"},
     {id:"endPage",   name:"끝페이지",  system:true, field:"endPage"},
     {id:"memo",      name:"메모",      system:true, field:"memo"},
-    {id:"pdf",       name:"PDF",       system:true, field:"pdf"}
+    {id:"pdf",       name:"PDF",       system:true, field:"pdf"},
+    {id:"authorsEn", name:"영문저자", system:true, optional:true, field:"authorsEn"},
+    {id:"titleEn", name:"영문제목", system:true, optional:true, field:"titleEn"},
+    {id:"journalEn", name:"영문학술지명", system:true, optional:true, field:"journalEn"},
+    {id:"doi", name:"DOI", system:true, optional:true, field:"doi"}
   ];
 
   const PAPER_FIELDS = SYSTEM_COLUMNS.map(c=>c.field);
@@ -545,7 +549,7 @@
     }
 
     for(const systemColumn of SYSTEM_COLUMNS){
-      if(!usedIds.has(systemColumn.id)){
+      if(!systemColumn.optional && !usedIds.has(systemColumn.id)){
         result.push({...systemColumn});
         usedIds.add(systemColumn.id);
         usedNames.add(normalizeColumnName(systemColumn.name));
@@ -562,6 +566,8 @@
     };
 
     for(const field of PAPER_FIELDS){
+      const definition=SYSTEM_COLUMNS.find(c=>c.field===field);
+      if(definition?.optional && (!columns.some(c=>c.field===field || normalizeColumnName(c.name)===normalizeColumnName(definition.name)) || paper[field]==null || String(paper[field]).trim()===""))continue;
       result[field]=paper[field] == null ? "" : String(paper[field]);
     }
 
@@ -647,6 +653,8 @@
 
   function valueForColumn(record,column){
     if(column.system)return record[column.field] ?? "";
+    const optional=SYSTEM_COLUMNS.find(c=>c.optional && normalizeColumnName(c.name)===normalizeColumnName(column.name));
+    if(optional && record[optional.field]!=null)return record[optional.field];
     return record.custom?.[column.id] ?? "";
   }
 

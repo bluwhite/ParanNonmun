@@ -63,3 +63,5 @@
   outline:2px solid rgba(234,179,8,.28);
   outline-offset:1px;
 }
+
+.import-actions,.footer-actions{flex-wrap:wrap}

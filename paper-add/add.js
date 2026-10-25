@@ -2,7 +2,8 @@ const ADD_FIELDS=[
   ["authors","저자",true],["year","출판연도",false],
   ["title","논문명",true],["journal","학술지명",true],["volume","권",false],
   ["issue","호",false],["publisher","학회명",true],["startPage","시작페이지",false],
-  ["endPage","끝페이지",false],["memo","메모",true],["pdf","PDF",true]
+  ["endPage","끝페이지",false],["authorsEn","영문저자",true],
+  ["titleEn","영문제목",true],["journalEn","영문학술지명",true],["doi","DOI",true],["memo","메모",true],["pdf","PDF",true]
 ];
 
 const $=id=>document.getElementById(id);
@@ -26,7 +27,7 @@ function buildPreview(){
     lab.htmlFor=`field-${field}`;
 
     let input;
-    if(["title","journal","publisher","memo","pdf"].includes(field)){
+    if(["title","titleEn","journal","journalEn","publisher","memo","pdf"].includes(field)){
       input=document.createElement("textarea");
     }else{
       input=document.createElement("input");
@@ -64,7 +65,9 @@ function collectPreview(){
   const result={check:""};
 
   for(const [field] of ADD_FIELDS){
-    result[field]=$(`field-${field}`).value.trim();
+    const value=$(`field-${field}`)?.value.trim()||"";
+    if(["authorsEn","titleEn","journalEn","doi"].includes(field) && !value)continue;
+    result[field]=value;
   }
 
   return result;
@@ -464,7 +467,7 @@ $("risText").addEventListener("input",()=>{
   clearPreview();
   clearAiDiagnostic();
   setParseState(
-    "입력됨 · AI, RIS, BibTeX, MLA 또는 APA 버튼을 누르세요."
+    "입력됨 · 파란 형식, AI, RIS, BibTeX, MLA 또는 APA 버튼을 누르세요."
   );
 });
 
@@ -484,7 +487,7 @@ $("brCleanupBtn").onclick=()=>{
   clearPreview();
   clearAiDiagnostic();
   setParseState(
-    "BR 태그를 줄바꿈으로 변환했습니다. AI, RIS, BibTeX, MLA 또는 APA 버튼을 누르세요."
+    "BR 태그를 줄바꿈으로 변환했습니다. 파란 형식, AI, RIS, BibTeX, MLA 또는 APA 버튼을 누르세요."
   );
   textarea.focus();
 };
@@ -567,3 +570,29 @@ buildPreview();
 ensureJournalInfo().catch(error=>{
   console.warn("학술지 정보 사전 로드 실패:",error);
 });
+
+$("paranParseBtn").onclick=()=>{
+  try{
+    const record=ParanFormat.parse(inputText());
+    parsed=record;
+    fillPreview(record);
+    $("addBtn").disabled=!record.title;
+    setParseState("파란 형식 분석 완료 · 선택 항목은 있는 값만 전달합니다.");
+  }catch(error){
+    clearPreview();
+    setParseState(error.message,"error");
+  }
+};
+$("paranCopyBtn").onclick=async()=>{
+  try{
+    const text=ParanFormat.stringify(collectPreview());
+    await navigator.clipboard.writeText(text);
+    setParseState("현재 입력 정보를 파란 형식으로 복사했습니다.");
+  }catch(error){setParseState("복사 실패: "+error.message,"error");}
+};
+$("paranPromptBtn").onclick=async()=>{
+  try{
+    await navigator.clipboard.writeText(ParanFormat.prompt);
+    setParseState("검색 요청문을 복사했습니다. AI 대화창에 붙여 넣고 논문 제목을 적으세요.");
+  }catch(error){setParseState("복사 실패: "+error.message,"error");}
+};

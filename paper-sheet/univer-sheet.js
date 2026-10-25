@@ -154,6 +154,7 @@
     }
 
     for(const systemColumn of global.ParanPaperData.SYSTEM_COLUMNS){
+      if(systemColumn.optional)continue;
       const key=global.ParanPaperData.normalizeColumnName(systemColumn.name);
       if(!seen.has(key)){
         return {

@@ -12,18 +12,19 @@
     <div>
       <div class="eyebrow">REFERENCE IMPORT</div>
       <h1>논문 추가</h1>
-      <p>참고문헌 정보를 붙여 넣고 Groq AI가 형식을 판단하게 하거나, RIS·BibTeX·APA·MLA를 직접 선택하세요.</p>
+      <p>참고문헌 정보를 붙여 넣고 Groq AI가 형식을 판단하게 하거나, 파란 형식·RIS·BibTeX·APA·MLA를 직접 선택하세요.</p>
     </div>
     <span id="versionBadge" class="version"></span>
   </header>
 
   <section class="panel">
     <label class="label" for="risText">참고문헌 정보</label>
-    <textarea id="risText" autofocus placeholder="RIS, BibTeX, APA 또는 MLA 참고문헌 정보를 붙여 넣으세요."></textarea>
+    <textarea id="risText" autofocus placeholder="파란 형식, RIS, BibTeX, APA 또는 MLA 참고문헌 정보를 붙여 넣으세요."></textarea>
 
     <div class="import-actions">
       <button id="brCleanupBtn" type="button">BR 줄바꿈 정리</button>
       <span class="action-spacer"></span>
+      <button id="paranParseBtn" type="button">파란 형식 분석</button>
       <button id="aiParseBtn" type="button" class="ai-parse-button">AI 분석</button>
       <button id="risParseBtn" type="button">RIS</button>
       <button id="bibtexParseBtn" type="button">BibTeX</button>
@@ -49,10 +50,13 @@
       <pre id="aiDiagnosticText"></pre>
       <button id="copyAiDiagnosticBtn" type="button">오류 상세 복사</button>
     </details>
+    <p class="hint">영문저자·영문제목·영문학술지명·DOI는 선택 항목입니다. 목록에 같은 이름의 열이 있을 때만 전달됩니다. 기존 목록에 필요하면 해당 이름의 열을 추가하세요.</p>
     <div id="previewGrid" class="preview-grid"></div>
   </section>
 
   <div class="footer-actions">
+    <button id="paranPromptBtn" type="button">AI 검색 요청문 복사</button>
+    <button id="paranCopyBtn" type="button">파란 형식 복사</button>
     <button id="cancelBtn">취소</button>
     <button id="addBtn" class="primary" disabled>목록에 추가</button>
   </div>
@@ -67,6 +71,7 @@
 <script src="../reference-import/apa-parser.js"></script>
 <script src="../reference-import/mla-parser.js"></script>
 <script src="../reference-import/ai-parser.js"></script>
+<script src="../reference-import/paran-format.js"></script>
 <script src="./add.js"></script>
 </body>
 </html>
