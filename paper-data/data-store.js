@@ -115,9 +115,13 @@
 
   const REFERENCE_TEMPLATE_CODES = [
     {code:"AU",label:"저자"},
+    {code:"EA",label:"영문저자 (마지막 저자 앞 and 자동 적용)"},
     {code:"PY",label:"출판연도"},
     {code:"TI",label:"논문명"},
+    {code:"ET",label:"영문제목"},
     {code:"JO",label:"학술지명"},
+    {code:"EJ",label:"영문학술지명"},
+    {code:"DOI",label:"DOI 전체 주소"},
     {code:"VL",label:"권"},
     {code:"IS",label:"호"},
     {code:"PB",label:"학회명/발행기관"},
@@ -125,7 +129,8 @@
     {code:"EP",label:"끝페이지"},
     {code:"VL+IS",label:"국내식 권·호"},
     {code:"VL(IS)",label:"권(호)"},
-    {code:"VL/IS",label:"권/호"}
+    {code:"VL/IS",label:"권/호"},
+    {code:"{DOI?...}",label:"DOI가 있을 때만 ... 부분 출력"}
   ];
 
   const DEFAULT_REFERENCE_STYLE = Object.freeze({
