@@ -111,7 +111,9 @@
   function tokenValues(paper,authorSeparator="·"){
     return {
       "AU":formatAuthorsForOutput(paper.authors,authorSeparator),
-      "EA":formatEnglishAuthorsForOutput(paper.authorsEn),
+      "EA":formatEnglishAuthorsForOutput(
+        clean(paper.authorsEn) || paper.authors
+      ),
       "PY":clean(paper.year),
       "TI":clean(paper.title),
       "ET":clean(paper.titleEn),
