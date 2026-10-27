@@ -1,4 +1,4 @@
-/* 파란 논문 v0.13.9 - 이탤릭 경계 공백 보존 */
+/* 파란 논문 v0.14.11 - 영문 서지/DOI 조건부 출력 */
 (function(global){
   "use strict";
 
@@ -17,6 +17,8 @@
     "VL(IS)",
     "VL+IS",
     "VL/IS",
+    "DOI",
+    "EA","ET","EJ",
     "AU","PY","TI","JO","VL","IS","PB","SP","EP"
   ];
 
@@ -90,12 +92,32 @@
     return authors.join(outputSeparator);
   }
 
+  function formatEnglishAuthorsForOutput(value){
+    const source=String(value??"");
+    if(!source.trim())return "";
+
+    const authors=source
+      .split("·")
+      .map(author=>clean(author))
+      .filter(Boolean);
+
+    if(!authors.length)return "";
+    if(authors.length===1)return authors[0];
+    if(authors.length===2)return `${authors[0]} and ${authors[1]}`;
+
+    return `${authors.slice(0,-1).join(", ")}, and ${authors[authors.length-1]}`;
+  }
+
   function tokenValues(paper,authorSeparator="·"){
     return {
       "AU":formatAuthorsForOutput(paper.authors,authorSeparator),
+      "EA":formatEnglishAuthorsForOutput(paper.authorsEn),
       "PY":clean(paper.year),
       "TI":clean(paper.title),
+      "ET":clean(paper.titleEn),
       "JO":clean(paper.journal),
+      "EJ":clean(paper.journalEn),
+      "DOI":clean(paper.doi),
       "VL":clean(paper.volume),
       "IS":clean(paper.issue),
       "PB":clean(paper.publisher),
@@ -137,13 +159,23 @@
   }
 
   function replaceTokensInTemplate(templateHtml,paper,authorSeparator="·"){
-    const box=document.createElement("div");
-    box.innerHTML=
+    const values=tokenValues(paper,authorSeparator);
+
+    let normalizedTemplate=
       global.ParanPaperData.sanitizeTemplateHtml(
         templateHtml
       );
 
-    const values=tokenValues(paper,authorSeparator);
+    // 조건부 블록: {DOI? DOI: DOI.}
+    // 앞의 토큰 값이 비어 있으면 블록 전체를 제거한다.
+    normalizedTemplate=normalizedTemplate.replace(
+      /\{(DOI|EA|ET|EJ|AU|PY|TI|JO|VL|IS|PB|SP|EP)\?([\s\S]*?)\}/g,
+      (_match,conditionToken,body)=>
+        clean(values[conditionToken]) ? body : ""
+    );
+
+    const box=document.createElement("div");
+    box.innerHTML=normalizedTemplate;
 
     const walker=document.createTreeWalker(
       box,
